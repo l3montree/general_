@@ -1,0 +1,9 @@
+eularian fluid sim done using youtube: https://www.youtube.com/watch?v=iKAVRgIrUOU
+"17 - How to write an Eulerian fluid simulator with 200 lines of code." by 10 min physics
+
+notes: 
+https://docs.google.com/document/d/1ouxLg-V1zl5cNs1C61rHHW0TddJiXh6OHmIa4n768uo
+
+
+
+
