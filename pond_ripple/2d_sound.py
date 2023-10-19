@@ -4,6 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import csv
 
+import inspect
 class wave:
 
     def __init__(self,start_point):
@@ -38,9 +39,17 @@ class wave:
         self.time_end = 10
 
         self.time_points =  [t/10 for t in range(0,self.time_end*10,self.dt*10)]
+        self.time_num_points = len(self.time_points)
 
+        #3d sin wave
         self.wave_length = 20
         self.func = lambda A,x,y: A*(np.sin(x*np.pi/self.wave_length)+np.sin(y*np.pi/self.wave_length)) 
+
+        #wave pde params
+        self.c = 1
+
+        #bc params
+        self.alpha = 1 #neumann
 
         #deugging
         self.csv_iter = 1
@@ -53,35 +62,106 @@ class wave:
         self.curr_wave_centre = 0
         pass
     
+    def bc_check(self,position):
+        [x,y] = position
+        if not x in [self.x_range[0], self.y_range[0]] or not y in [self.x_range[1], self.y_range[1]]:
+            return True
+        else:
+            raise ValueError(f'values passed to {inspect.currentframe().f_back.f_code.co_name} are not boundary values\nValues are: {position}')
+
+    def dirichlet_bc(self,position,value):
+        #check if value if boundary:
+        if self.bc_check(position):
+            return value
+
+    def neumann_bc(self,position,alpha):
+        [x,y] = position
+        self.bc_check(position)
+
+
+
+
+
+
     def after_initialise(self,time):
-        tensor_all_time =[]
-        matrix_current_time =[]
+
+        nm_length = self.x_num_points*self.y_num_points
+
+        matrix_all_time =np.zeros(self.time_points,nm_length)
+       
+        matrix_current_time =np.zeros(nm_length,nm_length)
         vector_per_position = np.zeros(self.x_num_points*self.y_num_points)
+
+        extra_vals_per_position = vector_per_position.copy()
 
         ix = lambda x,y: self.ix(x,y)
         xi = lambda ix_: self.xi(ix_)
 
-
-        for time in self.time_points:
+        for i in range(self.time_num_points):
+            time = self.time_points[i]
+            current_quantities_vector = matrix_all_time[i-1]
+            A = np.eye(nm_length)
             for y_index in self.y_positions:
                 for x_index in self.x_positions:
+                    left_right_bc = top_bott_bc = False
                     x = self.x_points[x_index]
                     y = self.y_points[y_index]
 
                     if x in self.x_range:
-                        continue #left/right BC
+                        continue
                     if y in self.y_range:
-                        continue #top/bott BC
+                        continue
                     if time == 0:
                         #time approx requires the previous time step, would not exist at t = 0
                         continue #IC
-                    
-                    vector_per_position[ix(x+1,y)] = 1/ self.dx^2
-                    vector_per_position[ix(x-1,y)] = 1/ self.dx^2
-                    vector_per_position[ix(x,y+1)] = 1/ self.dy^2
-                    vector_per_position[ix(x,y-1)] = 1/ self.dy^2
 
-                    vector_per_position[ix(x,y)] = 2*(1/(self.c*self.dt)^2 - 1/self.dx^2 - 1/self.dy^2)
+                    if left_right_bc and top_bott_bc:
+                        #corners 
+                        vector_per_position[ix(x,y)] = (self.alpha*2*self.dy + vector_per_position[xi(x,abs(y-2))] +  self.alpha*2*self.dx + vector_per_position[xi(abs(x-2),y)]) * 0.5
+
+                    if not left_right_bc:
+                        vector_per_position[ix(x+1,y)] = 1/ self.dx^2*self.dt^2*self.c^2
+                        vector_per_position[ix(x-1,y)] = 1/ self.dx^2*self.dt^2*self.c^2
+             
+                    if not top_bott_bc:
+                        vector_per_position[ix(x,y+1)] = 1/ self.dy^2*self.dt^2*self.c^2
+                        vector_per_position[ix(x,y-1)] = 1/ self.dy^2*self.dt^2*self.c^2
+                    
+
+                        vector_per_position[ix(x,y)] = 2*(-(self.c*self.dt)^2*(1/self.dx^2+1/self.dy^2) + 1)
+
+                        extra_vals_per_position[ix(x,y)] =  -1*(current_quantities_vector[ix(x,y)]) #references previous time value for position
+                    
+
+                    matrix_current_time[ix(x,y),:] = vector_per_position
+            
+            known_quantities_vector = matrix_current_time*current_quantities_vector 
+
+            #fill in bc
+            for y in self.y_points:
+                for x in self.x_points:
+                    if y in self.y_range:
+                        val = known_quantities_vector[ix(x,y)]
+                        if not val == 0:
+                            raise ValueError(f'position {x,y} has nonzero value, you need to set the bc values to a position with val = 0')
+                        else:
+                            if x in self.x_range and y in self.y_range:
+                                vector_per_position[ix(x,y)] = (self.alpha*2*self.dy + vector_per_position[xi(x,abs(y-2))] +  self.alpha*2*self.dx + vector_per_position[xi(abs(x-2),y)]) * 0.5
+                            elif x in self.x_range:
+                                 vector_per_position[ix(x-1,y)] = self.alpha*2*self.dx + vector_per_position[xi((x+2),y)]
+                            known_quantities_vector[ix(x,y)] = 
+            known_quantities_vector+=extra_vals_per_position
+            b = known_quantities_vector.copy()
+
+            
+
+            current_time_quantities = A/b
+            
+            matrix_all_time[i,:] = current_time_quantities
+
+
+
+
                     
 
 
