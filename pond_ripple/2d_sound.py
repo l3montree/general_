@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 import csv
 
 import inspect
+
+import time
+
+import scipy
 class wave:
 
     def __init__(self,start_point):
@@ -38,12 +42,12 @@ class wave:
         self.dt = 0.5
         self.time_end = 10
 
-        self.time_points =  [t/10 for t in range(0,self.time_end*10,self.dt*10)]
+        self.time_points =  [t/10 for t in range(0,self.time_end*10,int(self.dt*10))]
         self.time_num_points = len(self.time_points)
 
         #3d sin wave
         self.wave_length = 20
-        self.func = lambda A,x,y: A*(np.sin(x*np.pi/self.wave_length)+np.sin(y*np.pi/self.wave_length)) 
+        self.func = lambda A,wave_length,x,y: A*(np.sin(x*np.pi/wave_length)+np.sin(y*np.pi/wave_length)) 
 
         #wave pde params
         self.c = 1
@@ -54,13 +58,18 @@ class wave:
         #deugging
         self.csv_iter = 1
 
+        #printing solution params
+        self.delay_time = self.dt
+
+        #initialise params
+        self.initialised_field = False
+
         #sim 
         self.run_sim()
         
     def initialise(self):
         self.growth_rate = 1.1
         self.curr_wave_centre = 0
-        pass
     
     def bc_check(self,position):
         [x,y] = position
@@ -78,35 +87,69 @@ class wave:
         [x,y] = position
         self.bc_check(position)
 
+    def initiliaze_field(self):
+        field = np.zeros([self.x_num_points,self.y_num_points])
 
+        #you want a convex wave
+        A = 1
+        wave_length = 4
+        radius = 5
+        func = lambda x,y: self.func(A,wave_length,x,y)
 
+        x_curr = self.x_start
+        y_curr = self.y_start
+        
+        x_shifted = lambda x: int(x + self.x_start // self.dx)
+        y_shifted = lambda y: int(y + self.y_start // self.dy)
 
+        for x_index in [int(i) for i in self.x_positions if self.x_points[i] < radius and self.x_points[i] > -radius]:
+            for y_index in [int(j) for j in self.y_positions if self.y_points[j] < radius and self.y_points[j] > -radius]:
+                i_=x_shifted(x_index)
+                j_ = y_shifted(y_index)
 
+                field[i_,j_] = func(self.x_points[x_index],self.y_points[y_index])
 
-    def after_initialise(self,time):
+        self.initialised_field = True
+        return field
+            
+
+    def row_matrix_pde_solve(self,initial_field_matrix:np.ndarray):
 
         nm_length = self.x_num_points*self.y_num_points
-
-        matrix_all_time =np.zeros(self.time_points,nm_length)
+        matrix_all_time =np.zeros([self.time_num_points,nm_length])
        
-        matrix_current_time =np.zeros(nm_length,nm_length)
-        vector_per_position = np.zeros(self.x_num_points*self.y_num_points)
+        matrix_current_time =np.zeros([self.x_num_points,self.y_num_points])
+        vector_per_position = np.zeros([self.x_num_points*self.y_num_points])
 
         extra_vals_per_position = vector_per_position.copy()
 
         ix = lambda x,y: self.ix(x,y)
         xi = lambda ix_: self.xi(ix_)
 
-        for i in range(self.time_num_points):
+        #converting initial field condition matrix into vector and storing in all_time matrix
+        initial_field_vector = np.zeros(nm_length)
+        if self.initialised_field:
+            for i in self.x_positions:
+                for j in self.y_positions:
+                    initial_field_vector[ix(i,j)] = initial_field_matrix[i,j]
+        
+            matrix_all_time[0,:] = initial_field_vector
+        else:
+            raise ValueError(f'Initial Field not passed')
+
+        for i in range(1,self.time_num_points):
             time = self.time_points[i]
             current_quantities_vector = matrix_all_time[i-1]
-            A = np.eye(nm_length)
+            A = scipy.sparse.eye(nm_length)
+            matrix_current_time = A.copy()
             for y_index in self.y_positions:
                 for x_index in self.x_positions:
-                    left_right_bc = top_bott_bc = False
+
+                    #x,y point being used in current loop
                     x = self.x_points[x_index]
                     y = self.y_points[y_index]
-
+                    
+                    # skips all BCs and ICs
                     if x in self.x_range:
                         continue
                     if y in self.y_range:
@@ -115,66 +158,108 @@ class wave:
                         #time approx requires the previous time step, would not exist at t = 0
                         continue #IC
 
-                    if left_right_bc and top_bott_bc:
-                        #corners 
-                        vector_per_position[ix(x,y)] = (self.alpha*2*self.dy + vector_per_position[xi(x,abs(y-2))] +  self.alpha*2*self.dx + vector_per_position[xi(abs(x-2),y)]) * 0.5
+                    #filling in matrix values for new time step
+                    """
+                    for a new time step, quantity at non-boundary point depends on:
+                        5 prev time step quantities
+                        1 prev prev time step quantity
+                    """
+                    vector_per_position[ix(x_index+1,y_index)] = 1/ np.power(self.dx,2) * np.power(self.dt,2) * np.power(self.c,2)
+                    vector_per_position[ix(x_index-1,y_index)] = 1/ np.power(self.dx,2) * np.power(self.dt,2) * np.power(self.c,2)
+        
+                    vector_per_position[ix(x_index, y_index + 1)] = 1/ np.power(self.dy,2) * np.power(self.dt,2) * np.power(self.c,2)
+                    vector_per_position[ix(x_index, y_index - 1 )] = 1/  np.power(self.dy,2) * np.power(self.dt,2) * np.power(self.c,2)
+                
+                    vector_per_position[ix(x_index,y_index)] = 2 * (- np.power(self.c*self.dt,2 ) * (1/ np.power(self.dx,2)+1/ np.power(self.dy,2)  + 1) )
 
-                    if not left_right_bc:
-                        vector_per_position[ix(x+1,y)] = 1/ self.dx^2*self.dt^2*self.c^2
-                        vector_per_position[ix(x-1,y)] = 1/ self.dx^2*self.dt^2*self.c^2
-             
-                    if not top_bott_bc:
-                        vector_per_position[ix(x,y+1)] = 1/ self.dy^2*self.dt^2*self.c^2
-                        vector_per_position[ix(x,y-1)] = 1/ self.dy^2*self.dt^2*self.c^2
+                    extra_vals_per_position[ix(x_index,y_index)] =  -1 * (current_quantities_vector[ix(x_index,y_index)]) #references previous time value for position
+
+                    """
+                    TODO:
+                    create a vectors that will be passed into the sparse matrix: 
                     
+                    """
 
-                        vector_per_position[ix(x,y)] = 2*(-(self.c*self.dt)^2*(1/self.dx^2+1/self.dy^2) + 1)
-
-                        extra_vals_per_position[ix(x,y)] =  -1*(current_quantities_vector[ix(x,y)]) #references previous time value for position
-                    
-
-                    matrix_current_time[ix(x,y),:] = vector_per_position
+                    matrix_current_time[ix(x_index,y_index),:] = vector_per_position #######upto here!!!
+                    #problem: ix(x,y) --> n,m values can be incorrect???
             
             known_quantities_vector = matrix_current_time*current_quantities_vector 
+            known_quantities_vector+=extra_vals_per_position #all non-boundary quantities have been derived
 
-            #fill in bc
-            for y in self.y_points:
-                for x in self.x_points:
-                    if y in self.y_range:
-                        val = known_quantities_vector[ix(x,y)]
+            #fill in boundary quantitites!!
+            #BC: Neumann
+            for y_index_ in self.y_positions:
+                for x_index_ in self.x_positions:
+                    x_curr = self.x_points[x_index_]
+                    y_curr = self.y_points[y_index_]
+
+                    if x_curr in self.x_range or y_curr in self.y_range: #checks if x,y are boundary points
+                        val = known_quantities_vector[ix(x_index_,y_index_)] #boundary values should be unset, ie = 0
+
                         if not val == 0:
-                            raise ValueError(f'position {x,y} has nonzero value, you need to set the bc values to a position with val = 0')
+                            raise ValueError(f'position {x_index_,y_index_} has nonzero value, you need to set the bc values to a position with val = 0')
                         else:
-                            if x in self.x_range and y in self.y_range:
-                                vector_per_position[ix(x,y)] = (self.alpha*2*self.dy + vector_per_position[xi(x,abs(y-2))] +  self.alpha*2*self.dx + vector_per_position[xi(abs(x-2),y)]) * 0.5
-                            elif x in self.x_range:
-                                 vector_per_position[ix(x-1,y)] = self.alpha*2*self.dx + vector_per_position[xi((x+2),y)]
-                            known_quantities_vector[ix(x,y)] = 
-            known_quantities_vector+=extra_vals_per_position
+                            if x_curr in self.x_range and y_curr in self.y_range:
+                                #corners
+                                known_quantities_vector[ix(x_index_,y_index_)] = (self.alpha*2*self.dy + known_quantities_vector[xi(x_index_,abs(y_index_-2))] +  self.alpha*2*self.dx + known_quantities_vector[xi(abs(x_index_-2),y_index_)]) * 0.5
+                            elif x_curr in self.x_range and not y_curr in self.y_range:
+                                #left right bc
+                                known_quantities_vector[ix(x_index_,y_index_)] = self.alpha*2*self.dx + vector_per_position[xi(abs(x_index_-2),y_index_)]
+                            elif y_curr in self.y_range and not x_curr in self.x_range:
+                                #top bott bc
+                                known_quantities_vector[ix(x,y)] = self.alpha*2*self.dy + vector_per_position[xi(x,abs(y-2))]
+                            else:
+                                raise ValueError(f'[{x,y}] outputs an error when setting BC')
+        
             b = known_quantities_vector.copy()
-
-            
-
             current_time_quantities = A/b
             
             matrix_all_time[i,:] = current_time_quantities
+        
 
-
-
-
-                    
-
-
+        #converting matrix into a tensor of form [time,Q(x,y)]
+        nm_points = self.x_num_points *self.y_num_points
+        
+        spatial_matrix = np.array([self.x_num_points,self.y_num_points])
+        temporal_spatial_matrix = np.array([self.time_num_points,self.x_num_points,self.y_num_points])
     
+        for index_  in range(self.time_num_points): #steps through time, which is the rows, each row represents a single time step
+            current_time_step = self.time_points[index_]
+            current_timestep_matrix = spatial_matrix.copy()
+            current_quantities_vector = matrix_all_time[index_,:,:]
+            for index in range(nm_points): #each time step, now fill in quantities for each (x,y)
+                current_timestep_matrix[xi(index)] = current_quantities_vector[index]
+            #storing current_timestep_quantities matrix into all time tensor
+            temporal_spatial_matrix[index_,:,:] = current_timestep_matrix
+        
+        #print the quantities: Q(x,y) over time
+        X, Y = np.meshgrid(self.x_points, self.y_points)
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        
+        while True:
+            for time_index in range(self.time_num_points):
+                Z = temporal_spatial_matrix[time_index,:,:]
+                surf = ax.plot_surface(X, Y, Z, cmap='viridis')
+                plt.pause(self.delay_time)
+                surf.remove()
+
     def run_sim(self):
-        self.solve_matrix_using_vector()
+        self.solve_using_pde_fd()
+
+        #self.solve_matrix_using_vector()
+
+    def solve_using_pde_fd(self):
+        Z_initial = self.initiliaze_field()
+        self.row_matrix_pde_solve(Z_initial)
+
 
     def ix(self, x, y):
-        return (y*self.n) + x
+        return (y*self.x_num_points) + x
     
     def xi(self, ix):
-        y = ix // self.m
-        x = ix % self.m
+        y = ix // self.y_num_points
+        x = ix % self.y_num_points
         return x,y
        
 
@@ -218,8 +303,6 @@ class wave:
         #ax.scatter(X, Y, Z, c = Z, cmap = 'jet')
 
         ax.plot_surface(X, Y, Z, cmap = 'jet')
-
-        
 
         # Add labels
         ax.set_xlabel('X Label')
