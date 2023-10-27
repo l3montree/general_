@@ -118,28 +118,32 @@ class wave:
 
         self.initialised_field = True
         return field
+    
+    def convert_matrix_to_vector(self,matrix:np.ndarray):
+        x_,y_ = matrix.shape()
+        vector = np.zeros(int(x_*y_))
+        ix = lambda x,y: self.ix(x,y)
+        for i in range(x_):
+            for j in range(y_):
+                vector[ix(i, j)] = matrix[i, j]
+        return vector
 
-    def row_matrix_pde_solve(self, initial_field_matrix: np.ndarray):
+    def explicit_FTCS(self, initial_field_matrix: np.ndarray):
 
         nm_length = self.x_num_points*self.y_num_points
-        matrix_all_time = np.zeros([self.time_num_points, nm_length])
+        matrix_after_init = []
 
         matrix_current_time = np.zeros([self.x_num_points, self.y_num_points])
         vector_per_position = np.zeros([self.x_num_points*self.y_num_points])
 
         extra_vals_per_position = vector_per_position.copy()
 
-        def ix(x, y): return self.ix(x, y)
-        def xi(ix_): return self.xi(ix_)
+        ix = lambda x, y: self.ix(x, y)
+        xi = lambda ix_: self.xi(ix_)
 
         # converting initial field condition matrix into vector and storing in all_time matrix
-        initial_field_vector = np.zeros(nm_length)
         if self.initialised_field:
-            for i in self.x_positions:
-                for j in self.y_positions:
-                    initial_field_vector[ix(i, j)] = initial_field_matrix[i, j]
-
-            matrix_all_time[0, :] = initial_field_vector
+            initial_field_vector = self.convert_matrix_to_vector(initial_field_matrix)
         else:
             raise ValueError(f'Initial Field not passed')
 
@@ -147,11 +151,13 @@ class wave:
         y_values = []
         value = []
 
-        for i in range(1, self.time_num_points):
+        for i in range(self.time_num_points):
             time = self.time_points[i]
-            current_quantities_vector = matrix_all_time[i-1]
+            if i == 0:
+                current_quantities_vector = initial_field_vector
+            else:
+                current_quantities_vector = matrix_after_init[-1]
             A = scipy.sparse.eye(nm_length)
-            matrix_current_time = A.copy()
             for y_index in self.y_positions:
                 for x_index in self.x_positions:
 
@@ -246,43 +252,44 @@ class wave:
             known_quantities_vector = matrix_current_time*current_quantities_vector
             # all non-boundary quantities have been derived
             known_quantities_vector += extra_vals_per_position
-
+            bc = False
             # fill in boundary quantitites!!
             # BC: Neumann
-            for y_index_ in self.y_positions:
-                for x_index_ in self.x_positions:
-                    x_curr = self.x_points[x_index_]
-                    y_curr = self.y_points[y_index_]
+            if bc:
+                for y_index_ in self.y_positions:
+                    for x_index_ in self.x_positions:
+                        x_curr = self.x_points[x_index_]
+                        y_curr = self.y_points[y_index_]
 
-                    if x_curr in self.x_range or y_curr in self.y_range:  # checks if x,y are boundary points
-                        # boundary values should be unset, ie = 0
-                        val = known_quantities_vector[ix(x_index_, y_index_)]
+                        if x_curr in self.x_range or y_curr in self.y_range:  # checks if x,y are boundary points
+                            # boundary values should be unset, ie = 0
+                            val = known_quantities_vector[ix(x_index_, y_index_)]
 
-                        if not val == 0:
-                            raise ValueError(
-                                f'position {x_index_,y_index_} has nonzero value, you need to set the bc values to a position with val = 0')
-                        else:
-                            if x_curr in self.x_range and y_curr in self.y_range:
-                                # corners
-                                print()
-                                known_quantities_vector[ix(x_index_, y_index_)] = (self.alpha*2*self.dy + known_quantities_vector[ix(
-                                    x_index_, abs(y_index_-2))] + self.alpha*2*self.dx + known_quantities_vector[ix(abs(x_index_-2), y_index_)]) * 0.5
-                            elif x_curr in self.x_range and not y_curr in self.y_range:
-                                # left right bc
-                                known_quantities_vector[ix(
-                                    x_index_, y_index_)] = self.alpha*2*self.dx + vector_per_position[ix(abs(x_index_-2), y_index_)]
-                            elif y_curr in self.y_range and not x_curr in self.x_range:
-                                # top bott bc
-                                known_quantities_vector[ix(
-                                    x_index, y_index)] = self.alpha*2*self.dy + vector_per_position[ix(x_index, abs(y_index-2))]
-                            else:
+                            if not val == 0:
                                 raise ValueError(
-                                    f'[{x,y}] outputs an error when setting BC')
+                                    f'position {x_index_,y_index_} has nonzero value, you need to set the bc values to a position with val = 0')
+                            else:
+                                if x_curr in self.x_range and y_curr in self.y_range:
+                                    # corners
+                                    print()
+                                    known_quantities_vector[ix(x_index_, y_index_)] = (self.alpha*2*self.dy + known_quantities_vector[ix(
+                                        x_index_, abs(y_index_-2))] + self.alpha*2*self.dx + known_quantities_vector[ix(abs(x_index_-2), y_index_)]) * 0.5
+                                elif x_curr in self.x_range and not y_curr in self.y_range:
+                                    # left right bc
+                                    known_quantities_vector[ix(
+                                        x_index_, y_index_)] = self.alpha*2*self.dx + vector_per_position[ix(abs(x_index_-2), y_index_)]
+                                elif y_curr in self.y_range and not x_curr in self.x_range:
+                                    # top bott bc
+                                    known_quantities_vector[ix(
+                                        x_index, y_index)] = self.alpha*2*self.dy + vector_per_position[ix(x_index, abs(y_index-2))]
+                                else:
+                                    raise ValueError(
+                                        f'[{x,y}] outputs an error when setting BC')
 
             b = known_quantities_vector.copy()
             current_time_quantities = A/b
 
-            matrix_all_time[i, :] = current_time_quantities
+            matrix_after_init.append(current_time_quantities)
 
         # converting matrix into a tensor of form [time,Q(x,y)]
         nm_points = self.x_num_points * self.y_num_points
@@ -292,10 +299,10 @@ class wave:
             [self.time_num_points, self.x_num_points, self.y_num_points])
 
         # steps through time, which is the rows, each row represents a single time step
-        for index_ in range(self.time_num_points):
+        for index_ in range(1,self.time_num_points):
             current_time_step = self.time_points[index_]
             current_timestep_matrix = spatial_matrix.copy()
-            current_quantities_vector = matrix_all_time[index_, :, :]
+            current_quantities_vector = matrix_after_init[index_, :, :]
             # each time step, now fill in quantities for each (x,y)
             for index in range(nm_points):
                 current_timestep_matrix[xi(
