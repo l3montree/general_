@@ -21,16 +21,12 @@ class wave:
     
         self.wave_origin = start_point
 
-        # wave terms
-        self.A = None
-        self.c = None  # wave pde
-
         # spatial terms
-        self.dx = 0.5
+        self.dx = 1
         self.dy = self.dx
 
-        self.x_range = [0,20]
-        self.y_range = [0,30]
+        self.x_range = [0,50]
+        self.y_range = self.x_range
 
         self.x_start = start_point[0]
         self.y_start = start_point[1]
@@ -38,28 +34,23 @@ class wave:
         if not (self.x_range[1] - self.x_start)< (self.x_range[1]- self.x_range[0]) or not (self.y_range[1] - self.y_start)< (self.y_range[1]- self.y_range[0]):
             raise ValueError(f'({self.x_start,self.y_start}) not between xrange: ({self.x_range}) and/or yrange: ({self.y_range})')
         
-        self.x_points = np.arange(self.x_range[0], self.x_range[1] + self.dx, self.dx, dtype = np.float32)
+        self.x_points = np.arange(self.x_range[0], self.x_range[1] + self.dx, self.dx, dtype = int)
             
         self.y_points = np.arange(
-            self.y_range[0], self.y_range[1] + self.dy, self.dy, dtype = np.float32)
+            self.y_range[0], self.y_range[1] + self.dy, self.dy, dtype = int)
 
         self.x_num_points = len(self.x_points)
         self.y_num_points = len(self.y_points)
 
         # temporal terms
-        self.dt = 0.1
-        self.time_end = self.dt*50
+        self.dt = 1
+        self.time_end = self.dt*20
 
         self.time_points = np.arange(0,self.time_end+self.dt,self.dt)
         self.time_num_points = len(self.time_points)
 
-        # 3d sin wave
-        self.wave_length = 20
-        self.func = lambda A, wave_length, x, y: A * \
-            (np.sin(x*np.pi/wave_length)+np.sin(y*np.pi/wave_length))
-
         # wave pde params
-        self.c = 1
+        self.c = 10 #velocity of the waves
 
         # bc params
         self.alpha = 1  # neumann
@@ -99,7 +90,6 @@ class wave:
         i_centre = (self.x_start//self.dx)
         j_centre = (self.y_start//self.dy)
 
-        print(f'radius = {radius}')
         i_var = radius//self.dx*1.1
         j_var = radius//self.dy*1.1
 
@@ -193,6 +183,7 @@ class wave:
  
         for ti in range(self.time_num_points):
             time = self.time_points[ti]
+            print(f'time = {time}')
 
             # initial field @t =0
             if time == 0:
@@ -270,7 +261,7 @@ class wave:
 
                     # references previous time value for position
 
-                    if ti == self.dt:
+                    if ti == 1:
                         extra_vals_per_position[ix(
                             i, j)] = -1 * (prev_quantities_vector[ix(i, j)])
 
@@ -346,7 +337,7 @@ class wave:
 
         while True:
             plt.pause(delay_time)
-            ax.clf
+            plt.clf()
 
             iter+=1
             iter = iter % self.time_num_points
@@ -364,7 +355,7 @@ class wave:
             ax.set_title(f'3D Surface Plot (t = {self.time_points[0]})')
             #ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
 
-            Z = quantities_all_time_tensor[iter, :, :]
+            Z = np.clip(quantities_all_time_tensor[iter, :, :],-2,2)
             #print(f'time = {self.time_points[iter]}')
             #print(Z)
             ax.plot_surface(X, Y, Z, cmap='viridis')
