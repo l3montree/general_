@@ -44,7 +44,7 @@ class wave:
 
         # temporal terms
         self.dt = 1
-        self.time_end = self.dt*20
+        self.time_end = self.dt*5
 
         self.time_points = np.arange(0,self.time_end+self.dt,self.dt)
         self.time_num_points = len(self.time_points)
@@ -180,6 +180,21 @@ class wave:
             B --> matrix containing coefficients of c, which when B*c you get quantity at new timestep given previous time step
             extra_vals --> vector containing extra values from BC or laplace module (space and/or time)
         """
+        X, Y = np.meshgrid(self.x_points, self.y_points)
+        # Create a 3D plot
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Plot the (x, y, z) data points
+        # ax.plot_wireframe(X, Y, Z, rstride=10, cstride=10)
+        ax.plot([self.x_start, self.x_start], [self.y_start,
+                self.y_start], [-1.5, 1.5], c="k", marker="*")
+
+        # Add labels
+        ax.set_xlabel('X Label')
+        ax.set_ylabel('Y Label')
+        ax.set_zlabel('Z Label')
+        plt.show()
  
         for ti in range(self.time_num_points):
             time = self.time_points[ti]
@@ -193,8 +208,25 @@ class wave:
                 prev_quantities_vector = self.convert_matrix_to_vector(initial_field_matrix)
                 quantities_all_time_matrix[ti][:] = prev_quantities_vector #needs to updated for t>0
                 quantities_all_time_tensor[ti][:][:] = self.convert_vector_to_matrix(prev_quantities_vector)
+
+                #plot vals
+                Z = initial_field_matrix
+                ax = fig.add_subplot(111, projection='3d')
+
+                # Plot the (x, y, z) data points
+                # ax.plot_wireframe(X, Y, Z, rstride=10, cstride=10)
+                ax.plot([self.x_start, self.x_start], [self.y_start,
+                        self.y_start], [-1.5, 1.5], c="k", marker="*")
+                ax.plot_surface(X, Y, Z, cmap='jet')
+
+                # Add labels
+                ax.set_xlabel('X Label')
+                ax.set_ylabel('Y Label')
+                ax.set_zlabel('Z Label')
+                ax.set_title(f'time = {time}')
+                plt.show()
+                
                 continue
-            
             
             all_position_coeff_matrix = np.zeros([nm_length,nm_length], dtype=np.float32)
 
@@ -234,30 +266,21 @@ class wave:
                         5 prev time step quantities
                         1 prev prev time step quantity
                     """
+                    alpha = (self.c*self.dt)**2
                     # right point
-                    curr_position_quantities_vector[ix(i+1,j)] = np.power(self.dt, 2) * \
-                        np.power(self.c, 2)/ \
-                        np.power(self.dx, 2) 
+                    curr_position_quantities_vector[ix(i+1,j)] = alpha/self.dx**2
                     
                     # left point
-                    curr_position_quantities_vector[ix(i-1,j)] = np.power(self.dt, 2) * \
-                        np.power(self.c, 2) / \
-                        np.power(self.dx, 2) 
+                    curr_position_quantities_vector[ix(i-1,j)] = alpha/self.dx**2
 
                     # top point
-                    curr_position_quantities_vector[ix(i,j+1)] = np.power(self.dt, 2) * \
-                        np.power(self.c, 2) / \
-                        np.power(self.dy, 2) 
+                    curr_position_quantities_vector[ix(i,j+1)] = alpha/self.dy**2
 
                     # bott point
-                    curr_position_quantities_vector[ix(i,j-1)] = np.power(self.dt, 2) * \
-                        np.power(self.c, 2) / \
-                        np.power(self.dy, 2) 
+                    curr_position_quantities_vector[ix(i,j-1)] = alpha/self.dy**2
 
                     # centre point
-                    curr_position_quantities_vector[ix(i,j)] = 2 * \
-                        (- np.power(self.c*self.dt, 2) *
-                         (1 / np.power(self.dx, 2)+ 1 / np.power(self.dy, 2) ))
+                    curr_position_quantities_vector[ix(i,j)] = 2*(1 - alpha/(self.dx**2)- alpha/(self.dy**2))
 
                     # references previous time value for position
 
@@ -280,7 +303,7 @@ class wave:
 
                     # matrix_current_time[ix(x_index,y_index),:] = vector_per_position #######upto here!!!
                     # problem: ix(x,y) --> n,m values can be incorrect??
-         
+
             B = all_position_coeff_matrix.copy()
             c = prev_quantities_vector.copy()
             b = B @ c
@@ -294,6 +317,23 @@ class wave:
             quantities_all_time_matrix[ti][:] = prev_quantities_vector
 
             quantities_all_time_tensor[ti][:][:] = self.convert_vector_to_matrix(prev_quantities_vector)
+
+            #plot vals
+            plt.cla()
+            ax = fig.add_subplot(111, projection='3d')
+
+            # Plot the (x, y, z) data points
+            # ax.plot_wireframe(X, Y, Z, rstride=10, cstride=10)
+            ax.plot([self.x_start, self.x_start], [self.y_start,
+                    self.y_start], [-1.5, 1.5], c="k", marker="*")
+
+            # Add labels
+            ax.set_xlabel('X Label')
+            ax.set_ylabel('Y Label')
+            ax.set_zlabel('Z Label')
+            ax.set_title(f'time = {time}')
+            ax.plot_surface(X, Y, self.convert_vector_to_matrix(prev_quantities_vector), cmap='jet')
+    
         self.wave_tensor = quantities_all_time_tensor
     
     def print_all_time_tensor(self, delay_time = 3):
