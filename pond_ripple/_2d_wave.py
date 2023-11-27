@@ -121,7 +121,8 @@ class wave:
     
     def convert_matrix_to_vector(self,matrix:np.ndarray):
         y_num,x_num = matrix.shape
-        vector = np.zeros(int(x_num*y_num))
+        nm_len = int(x_num*y_num)
+        vector = np.zeros(nm_len)
         ix = lambda i,j: self.ix(i,j)
 
         for i in range(x_num):
@@ -132,15 +133,102 @@ class wave:
     def convert_vector_to_matrix(self,vector:np.ndarray):
         xi = lambda ix: self.xi(ix)
 
-        matrix = np.zeros([self.y_num_points,self.x_num_points])
+        matrix = np.zeros([self.y_num_points,self.x_num_points], dtype = np.float32)
 
         for ix in range(len(vector)):
             i,j = xi(ix)
             matrix[j][i] = vector[ix]
         return matrix
 
+    def explicit_FTCS_h4(self,initial_field_matrix):
 
-    def explicit_FTCS(self, initial_field_matrix: np.ndarray):
+        #matrix -  vector conversions
+        ix = lambda i,j: self.ix(i,j)
+        xi = lambda ix: self.xi(ix)
+
+        nm_len = int(self.x_num_points*self.y_num_points)
+
+        #initilise matrixs/vectors
+        all_time_tensor = np.zeros([self.time_num_points,self.y_num_points, self.x_num_points],dtype=np.float32)
+        vectors_per_pos_matrix = np.zeros([nm_len,nm_len], dtype=np.float32)
+        Q_matrix_per_time = np.zeros([self.y_num_points,self.x_num_points], dtype = np.float32)
+
+        #initial field vector
+        initial_field_vector = self.convert_matrix_to_vector(initial_field_matrix)
+
+        #solving
+        for t in self.time_num_points:
+            time_ = self.time_points[t]
+
+            A = vectors_per_pos_matrix.copy()
+
+            #constants in the finite difference
+            tau = (self.c * self.dt)**2
+            alpha = 12*self.dx**2
+            beta = 12*self.dy**2
+
+            #initialises prev_quanities
+            if t == 0:
+                cur_quantities_vector = initial_field_vector.copy()
+                prev_quantities_vector = np.zeros(nm_len, dtype = np.float32)
+            else:
+                prev_quantities_vector = cur_quantities_vector.copy()
+                cur_quantities_vector = new_time_quantities_vector.copy()
+
+            for i in range(self.x_num_points):
+                for j in range(self.y_num_points):
+                    cur_row = ix(i,j) #cur_row in A
+                    
+                    #BC --> dirichelet
+                    if i in [0,self.x_num_points-1] or j in [0, self.y_num_points-1]:
+                        A[cur_row,ix(i,j)] = 0
+                    
+                    else:
+                        #non BC points
+
+                        A[cur_row,cur_row] = (-30/alpha -30/beta + 2/tau)*tau
+                        
+                        for i in range(i-2,i+2):
+                            if i> 0:
+                                pass
+                                
+                            elif i>self.x_num_points -1:
+                                continue
+                            for j in range(j-2,j+2):
+                                if j<0:
+                                    continue
+                                elif j>self.y_num_points - 1:
+                                    continue
+                                
+                                #wrong logic!!!
+                                A[cur_row,ix(i+2,j)] = -tau/ alpha
+                                A[cur_row,ix(i+1,j)] = 16*tau/ alpha
+                                A[cur_row,ix(i-1,j)] = 16*tau/ alpha
+                                A[cur_row,ix(i-2,j)] = -tau/ alpha
+
+                                A[cur_row,ix(i,j+2)] = -tau/ beta
+                                A[cur_row,ix(i,j+1)] = 16*tau/ beta
+                                A[cur_row,ix(i,j-1)] = 16*tau/ beta
+                                A[cur_row,ix(i,j-2)] = -tau/ beta
+                    
+            
+
+
+                
+
+            new_time_quantities_vector = A*cur_quantities_vector - prev_quantities_vector
+
+
+
+
+        
+
+        
+    def explicit_FTCS_h2(self, initial_field_matrix: np.ndarray):
+        
+        """
+        solves FTCS with spatial accuracy of  O(h^2)
+        """
 
         nm_length = self.x_num_points*self.y_num_points
 
@@ -229,7 +317,7 @@ class wave:
                 continue
             
             all_position_coeff_matrix = np.zeros([nm_length,nm_length], dtype=np.float32)
-
+            
             # t> 0
             for j in range(self.y_num_points):
                 for i in range(self.x_num_points):
