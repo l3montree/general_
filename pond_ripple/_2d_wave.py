@@ -25,7 +25,7 @@ class wave:
         self.dx = 1
         self.dy = self.dx
 
-        self.x_range = [0,50]
+        self.x_range = [0,6]
         self.y_range = self.x_range
 
         self.x_start = start_point[0]
@@ -44,13 +44,13 @@ class wave:
 
         # temporal terms
         self.dt = 1
-        self.time_end = self.dt*5
+        self.time_end = self.dt*100
 
         self.time_points = np.arange(0,self.time_end+self.dt,self.dt)
         self.time_num_points = len(self.time_points)
 
         # wave pde params
-        self.c = 10 #velocity of the waves
+        self.c = 0.5 #velocity of the waves
 
         # bc params
         self.alpha = 1  # neumann
@@ -67,8 +67,19 @@ class wave:
         # sim
         self.solve_using_pde_fd()
 
+    def initiliaze_field_(self):
+        nm_len = self.x_num_points*self.y_num_points
 
-    def initiliaze_field(self):
+        field = np.zeros([self.y_num_points,self.x_num_points], dtype = np.float32)
+        
+        midpoint = (int(self.y_num_points/2), int(self.x_num_points/2))
+
+        field[midpoint] = 1
+        self.initialised_field = True
+
+        return field
+
+    def initiliaze_field_convex_wave(self):
         field = np.zeros([self.y_num_points, self.x_num_points])
         #####
         """
@@ -137,6 +148,12 @@ class wave:
 
         for ix in range(len(vector)):
             i,j = xi(ix)
+            """
+               print(f'ix = {ix}')
+            print(f"vector[ix] = {vector[ix]}")
+            print(f"i j = ({i,j}) ")
+            """
+         
             matrix[j][i] = vector[ix]
         return matrix
 
@@ -157,8 +174,10 @@ class wave:
         initial_field_vector = self.convert_matrix_to_vector(initial_field_matrix)
 
         #solving
-        for t in self.time_num_points:
-            time_ = self.time_points[t]
+        t = 0
+    
+        while True:#for t in range(self.time_num_points):
+            #time_ = self.time_points[t]
 
             A = vectors_per_pos_matrix.copy()
 
@@ -167,17 +186,42 @@ class wave:
             alpha = 12*self.dx**2
             beta = 12*self.dy**2
 
-            #initialises prev_quanities
-            if t == 0:
+            
+            if t == 0:  #initialises cur_quantities and prev_quanities
                 cur_quantities_vector = initial_field_vector.copy()
                 prev_quantities_vector = np.zeros(nm_len, dtype = np.float32)
+
+                #initialise plot
+                X, Y = np.meshgrid(self.x_points, self.y_points)
+                fig = plt.figure(figsize = (10,10))
+                ax = fig.add_subplot(111, projection='3d')
+                Z = initial_field_matrix
+
+                #ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
+                ax.plot_surface(X, Y, Z, cmap='viridis')
+
+                plt.draw()
+
+                ax.set_xlabel('X-axis')
+                ax.set_ylabel('Y-axis')
+                ax.set_zlabel('Z-axis')
+                ax.set_title(f'3D Surface Plot (t = {t})')
+                ax.set_zlim(-6,6)
+                
+                #plt.pause(10)
+                t += self.dt
+
             else:
+                #updates the vectors
                 prev_quantities_vector = cur_quantities_vector.copy()
                 cur_quantities_vector = new_time_quantities_vector.copy()
 
             for i in range(self.x_num_points):
                 for j in range(self.y_num_points):
                     cur_row = ix(i,j) #cur_row in A
+
+                    if j ==4:
+                        pass
                     
                     #BC --> dirichelet
                     if i in [0,self.x_num_points-1] or j in [0, self.y_num_points-1]:
@@ -188,19 +232,33 @@ class wave:
 
                         A[cur_row,cur_row] = (-30/alpha -30/beta + 2/tau)*tau
                         
-                        for i in range(i-2,i+2):
-                            if i> 0:
-                                pass
-                                
-                            elif i>self.x_num_points -1:
+                        # laplacian --> h^4
+
+                        Xlap_coef_list = [-tau/ alpha, 16*tau/ alpha ,16*tau/ alpha,-tau/ alpha] #X laplacian coef
+                        Ylap_coef_list = [-tau/ beta, 16*tau/ beta ,16*tau/ beta,-tau/ beta]
+
+                        for i_ in range(i-2,i+3):
+                            
+                            if i_< 0: #removes neg index
                                 continue
-                            for j in range(j-2,j+2):
-                                if j<0:
-                                    continue
-                                elif j>self.y_num_points - 1:
-                                    continue
+                            elif i_>self.x_num_points -1: #removes ref to points beyond x_end
+                                continue
+                            if i_ == i:
+                                for j_ in [a for a in range(j-2,j+3) if not a == j]: 
+                                    if j_<0:
+                                        continue
+                                    elif j_>self.y_num_points - 1:
+                                        continue
+                                    
+                                    coef_index = j_- (j -1)
+                                    A[cur_row,ix(i,j_)] = Ylap_coef_list[coef_index]
+                            else:
+                                coef_index = i_ - (i -1)
+                                A[cur_row,ix(i_,j)] = Xlap_coef_list[coef_index]
                                 
-                                #wrong logic!!!
+                                        
+
+                                """
                                 A[cur_row,ix(i+2,j)] = -tau/ alpha
                                 A[cur_row,ix(i+1,j)] = 16*tau/ alpha
                                 A[cur_row,ix(i-1,j)] = 16*tau/ alpha
@@ -210,18 +268,28 @@ class wave:
                                 A[cur_row,ix(i,j+1)] = 16*tau/ beta
                                 A[cur_row,ix(i,j-1)] = 16*tau/ beta
                                 A[cur_row,ix(i,j-2)] = -tau/ beta
-                    
+                                """
+
+            new_time_quantities_vector = A@cur_quantities_vector - prev_quantities_vector
+
+            Q_matrix = self.convert_vector_to_matrix(new_time_quantities_vector)
+
             
+            ax.cla()
 
+            ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
+            ax.plot_surface(X, Y, Q_matrix, cmap='viridis')
 
-                
+            plt.draw()
 
-            new_time_quantities_vector = A*cur_quantities_vector - prev_quantities_vector
+            ax.set_xlabel('X-axis')
+            ax.set_ylabel('Y-axis')
+            ax.set_zlabel('Z-axis')
+            ax.set_title(f'3D Surface Plot (t = {t})')
+            ax.set_zlim(-6,6)
 
-
-
-
-        
+            plt.pause(10)
+            t += self.dt
 
         
     def explicit_FTCS_h2(self, initial_field_matrix: np.ndarray):
@@ -499,9 +567,10 @@ class wave:
 
     def solve_using_pde_fd(self):
         #row major numbering
-        Z_initial = self.initiliaze_field()
-        self.explicit_FTCS(Z_initial)
-        self.print_all_time_tensor()
+        Z_initial = self.initiliaze_field_()
+        self.explicit_FTCS_h4(Z_initial)
+        #self.print_all_time_tensor()
+
 
     def ix(self, i, j):
         return (j*(self.x_num_points)) + i 
