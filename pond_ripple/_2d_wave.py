@@ -43,7 +43,7 @@ class wave:
         self.y_num_points = len(self.y_points)
 
         # temporal terms
-        self.dt = 1
+        self.dt = 0.01
         self.time_end = self.dt*100
 
         self.time_points = np.arange(0,self.time_end+self.dt,self.dt)
@@ -227,14 +227,14 @@ class wave:
                     if i in [0,self.x_num_points-1] or j in [0, self.y_num_points-1]:
                         A[cur_row,ix(i,j)] = 0
                     
-                    else:
+                    else: #[(2:xend-2),(2:yend-2)]
                         #non BC points
 
                         A[cur_row,cur_row] = (-30/alpha -30/beta + 2/tau)*tau
                         
                         # laplacian --> h^4
 
-                        Xlap_coef_list = [-tau/ alpha, 16*tau/ alpha ,16*tau/ alpha,-tau/ alpha] #X laplacian coef
+                        Xlap_coef_list = [-tau/ alpha, 16*tau/ alpha ,16*tau/ alpha, -tau/ alpha] #X laplacian coef
                         Ylap_coef_list = [-tau/ beta, 16*tau/ beta ,16*tau/ beta,-tau/ beta]
 
                         for i_ in range(i-2,i+3):
@@ -271,6 +271,26 @@ class wave:
                                 """
 
             new_time_quantities_vector = A@cur_quantities_vector - prev_quantities_vector
+            print("A")
+            for i in range(len(A)): 
+                a = [round(a,1) for a in A[i]]
+                print(a)
+
+            print("cur_quantities_vector")
+            A = self.convert_vector_to_matrix(cur_quantities_vector)
+            for i in range(len(A)): 
+                a = [round(a,1) for a in A[i]]
+                print(a)
+            
+            print("prev_quantities_vector")
+            A = self.convert_vector_to_matrix(prev_quantities_vector)
+            for i in range(len(A)): 
+                a = [round(a,1) for a in A[i]]
+                print(a)
+
+            """
+            here
+            """
 
             Q_matrix = self.convert_vector_to_matrix(new_time_quantities_vector)
 
