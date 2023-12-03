@@ -18,39 +18,41 @@ import math
 class wave:
 
     def __init__(self, start_point):
-    
+
         self.wave_origin = start_point
+
+        # wave pde params
+        self.c = 1  # velocity of the waves
 
         # spatial terms
         self.dx = 1
         self.dy = self.dx
 
-        self.x_range = [0,6]
+        self.x_range = [0, 50]
         self.y_range = self.x_range
 
         self.x_start = start_point[0]
         self.y_start = start_point[1]
 
-        if not (self.x_range[1] - self.x_start)< (self.x_range[1]- self.x_range[0]) or not (self.y_range[1] - self.y_start)< (self.y_range[1]- self.y_range[0]):
-            raise ValueError(f'({self.x_start,self.y_start}) not between xrange: ({self.x_range}) and/or yrange: ({self.y_range})')
-        
-        self.x_points = np.arange(self.x_range[0], self.x_range[1] + self.dx, self.dx, dtype = int)
-            
+        if not (self.x_range[1] - self.x_start) < (self.x_range[1] - self.x_range[0]) or not (self.y_range[1] - self.y_start) < (self.y_range[1] - self.y_range[0]):
+            raise ValueError(
+                f'({self.x_start,self.y_start}) not between xrange: ({self.x_range}) and/or yrange: ({self.y_range})')
+
+        self.x_points = np.arange(
+            self.x_range[0], self.x_range[1] + self.dx, self.dx, dtype=int)
+
         self.y_points = np.arange(
-            self.y_range[0], self.y_range[1] + self.dy, self.dy, dtype = int)
+            self.y_range[0], self.y_range[1] + self.dy, self.dy, dtype=int)
 
         self.x_num_points = len(self.x_points)
         self.y_num_points = len(self.y_points)
 
         # temporal terms
-        self.dt = 0.01
+        self.dt = 1/self.c*(1/self.dx+1/self.dy)**-1
         self.time_end = self.dt*100
 
-        self.time_points = np.arange(0,self.time_end+self.dt,self.dt)
+        self.time_points = np.arange(0, self.time_end+self.dt, self.dt)
         self.time_num_points = len(self.time_points)
-
-        # wave pde params
-        self.c = 0.5 #velocity of the waves
 
         # bc params
         self.alpha = 1  # neumann
@@ -70,11 +72,12 @@ class wave:
     def initiliaze_field_(self):
         nm_len = self.x_num_points*self.y_num_points
 
-        field = np.zeros([self.y_num_points,self.x_num_points], dtype = np.float32)
-        
+        field = np.zeros(
+            [self.y_num_points, self.x_num_points], dtype=np.float32)
+
         midpoint = (int(self.y_num_points/2), int(self.x_num_points/2))
 
-        field[midpoint] = 1
+        field[int(self.y_num_points/2), int(self.x_num_points/2)] = 1
         self.initialised_field = True
 
         return field
@@ -85,19 +88,20 @@ class wave:
         """
         fix initial field
             how to create a convex wave with radius = drop radius, suppose to represent a drop of water on the pond
-        """ 
+        """
         #####
 
         # you want a convex wave
         A = 1
         radius = 5
         x0, y0 = self.x_start, self.y_start
-        wave_func = lambda x, y: 0.5*A*(np.sin( (x-x0)/(4*radius)*2*np.pi + np.pi/2 ) + np.sin((y-y0)/(4*radius)*2*np.pi + np.pi/2)) 
+        def wave_func(x, y): return 0.5*A*(np.sin((x-x0)/(4*radius)*2 *
+                                                  np.pi + np.pi/2) + np.sin((y-y0)/(4*radius)*2*np.pi + np.pi/2))
         """
         wave eqn
         https://www.wolframalpha.com/input?i=3d+plot+sin%28x%2F%284*r%29*2*pi%2Bpi%2F2%29+%2B+sin%28y%2F%28r*4%29*2*pi%2Bpi%2F2%29+for+r+%3D+5
         """
-        
+
         i_centre = (self.x_start//self.dx)
         j_centre = (self.y_start//self.dy)
 
@@ -106,22 +110,22 @@ class wave:
 
         for i in range(int(i_centre - i_var), int(i_centre + i_var)):
             for j in range(int(j_centre - j_var), int(j_centre + j_var)):
-                if i<0 or j<0:
+                if i < 0 or j < 0:
                     raise ValueError(f'i,j = {i,j}, which is wrong!!!')
                 x = self.x_points[i]
                 y = self.y_points[j]
-                #print(f'x,y = {x,y}')
+                # print(f'x,y = {x,y}')
 
-                if (np.power(x-self.x_start,2)+ np.power(y-self.y_start,2) > np.power(radius,2)):
+                if (np.power(x-self.x_start, 2) + np.power(y-self.y_start, 2) > np.power(radius, 2)):
                     continue
 
-                if wave_func(x,y)>0:
-                    #print(f'i,j = {i,j} x,y = {x,y} , wave_func = {wave_func(x,y)}')
-                    field[j][i] = 1#wave_func(x,y)
+                if wave_func(x, y) > 0:
+                    # print(f'i,j = {i,j} x,y = {x,y} , wave_func = {wave_func(x,y)}')
+                    field[j][i] = 1  # wave_func(x,y)
 
         self.initialised_field = True
 
-        #self.print_Z(field)
+        # self.print_Z(field)
 
         """
          with open('initialised_data.csv', 'w', newline='') as csvfile:
@@ -129,75 +133,86 @@ class wave:
             csvwriter.writerows(field)
         """
         return field
-    
-    def convert_matrix_to_vector(self,matrix:np.ndarray):
-        y_num,x_num = matrix.shape
+
+    def convert_matrix_to_vector(self, matrix: np.ndarray):
+        y_num, x_num = matrix.shape
         nm_len = int(x_num*y_num)
         vector = np.zeros(nm_len)
-        ix = lambda i,j: self.ix(i,j)
+        def ix(i, j): return self.ix(i, j)
 
         for i in range(x_num):
             for j in range(y_num):
                 vector[ix(i, j)] = matrix[j][i]
         return vector
-    
-    def convert_vector_to_matrix(self,vector:np.ndarray):
-        xi = lambda ix: self.xi(ix)
 
-        matrix = np.zeros([self.y_num_points,self.x_num_points], dtype = np.float32)
+    def convert_vector_to_matrix(self, vector: np.ndarray):
+        def xi(ix): return self.xi(ix)
+
+        matrix = np.zeros(
+            [self.y_num_points, self.x_num_points], dtype=np.float32)
 
         for ix in range(len(vector)):
-            i,j = xi(ix)
+            i, j = xi(ix)
             """
                print(f'ix = {ix}')
             print(f"vector[ix] = {vector[ix]}")
             print(f"i j = ({i,j}) ")
             """
-         
+
             matrix[j][i] = vector[ix]
         return matrix
 
-    def explicit_FTCS_h4(self,initial_field_matrix):
+    def explicit_FTCS_h4(self, initial_field_matrix):
 
-        #matrix -  vector conversions
-        ix = lambda i,j: self.ix(i,j)
-        xi = lambda ix: self.xi(ix)
+        # matrix -  vector conversions
+        def ix(i, j): return self.ix(i, j)
+        def xi(ix): return self.xi(ix)
 
         nm_len = int(self.x_num_points*self.y_num_points)
 
-        #initilise matrixs/vectors
-        all_time_tensor = np.zeros([self.time_num_points,self.y_num_points, self.x_num_points],dtype=np.float32)
-        vectors_per_pos_matrix = np.zeros([nm_len,nm_len], dtype=np.float32)
-        Q_matrix_per_time = np.zeros([self.y_num_points,self.x_num_points], dtype = np.float32)
+        # initilise matrixs/vectors
+        all_time_tensor = np.zeros(
+            [self.time_num_points, self.y_num_points, self.x_num_points], dtype=np.float32)
+        vectors_per_pos_matrix = np.zeros([nm_len, nm_len], dtype=np.float32)
+        Q_matrix_per_time = np.zeros(
+            [self.y_num_points, self.x_num_points], dtype=np.float32)
 
-        #initial field vector
-        initial_field_vector = self.convert_matrix_to_vector(initial_field_matrix)
+        # initial field vector
+        initial_field_vector = self.convert_matrix_to_vector(
+            initial_field_matrix)
 
-        #solving
+        # solving
         t = 0
-    
-        while True:#for t in range(self.time_num_points):
-            #time_ = self.time_points[t]
+
+        while True:  # for t in range(self.time_num_points):
+            # time_ = self.time_points[t]
 
             A = vectors_per_pos_matrix.copy()
 
-            #constants in the finite difference
+            # constants in the finite difference
             tau = (self.c * self.dt)**2
             alpha = 12*self.dx**2
             beta = 12*self.dy**2
 
-            
-            if t == 0:  #initialises cur_quantities and prev_quanities
-                cur_quantities_vector = initial_field_vector.copy()
-                prev_quantities_vector = np.zeros(nm_len, dtype = np.float32)
+            # X laplacian coef
+            Xlap_coef_list = [-tau / alpha, 16*tau /
+                              alpha, 16*tau / alpha, -tau / alpha]
+            Ylap_coef_list = [-tau / beta, 16 *
+                              tau / beta, 16*tau / beta, -tau / beta]
+            centre_coeff = (-30/alpha - 30/beta + 2/tau)*tau
 
-                #initialise plot
+            if t == 0:  # initialises cur_quantities and prev_quanities
+                cur_quantities_vector = initial_field_vector.copy()
+                prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
+
+                # initialise plot
+                plt.ion()
                 X, Y = np.meshgrid(self.x_points, self.y_points)
-                fig = plt.figure(figsize = (10,10))
+                fig = plt.figure(figsize=(10, 10))
                 ax = fig.add_subplot(111, projection='3d')
                 Z = initial_field_matrix
 
-                #ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
+                # ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
                 ax.plot_surface(X, Y, Z, cmap='viridis')
 
                 plt.draw()
@@ -206,57 +221,51 @@ class wave:
                 ax.set_ylabel('Y-axis')
                 ax.set_zlabel('Z-axis')
                 ax.set_title(f'3D Surface Plot (t = {t})')
-                ax.set_zlim(-6,6)
-                
-                #plt.pause(10)
+                ax.set_zlim(-2, 2)
+
+                # plt.pause(10)
                 t += self.dt
 
             else:
-                #updates the vectors
+                # updates the vectors
                 prev_quantities_vector = cur_quantities_vector.copy()
                 cur_quantities_vector = new_time_quantities_vector.copy()
 
             for i in range(self.x_num_points):
                 for j in range(self.y_num_points):
-                    cur_row = ix(i,j) #cur_row in A
+                    cur_row = ix(i, j)  # cur_row in A
 
-                    if j ==4:
-                        pass
-                    
-                    #BC --> dirichelet
-                    if i in [0,self.x_num_points-1] or j in [0, self.y_num_points-1]:
-                        A[cur_row,ix(i,j)] = 0
-                    
-                    else: #[(2:xend-2),(2:yend-2)]
-                        #non BC points
+                    if j == 5 and i == 5:
+                        print("")
 
-                        A[cur_row,cur_row] = (-30/alpha -30/beta + 2/tau)*tau
-                        
-                        # laplacian --> h^4
+                    # BC --> dirichelet
+                    if i in [0, self.x_num_points-1] or j in [0, self.y_num_points-1]:
+                        A[cur_row, ix(i, j)] = 0
 
-                        Xlap_coef_list = [-tau/ alpha, 16*tau/ alpha ,16*tau/ alpha, -tau/ alpha] #X laplacian coef
-                        Ylap_coef_list = [-tau/ beta, 16*tau/ beta ,16*tau/ beta,-tau/ beta]
+                    else:  # [(2:xend-2),(2:yend-2)]
+                        # non BC points
 
-                        for i_ in range(i-2,i+3):
-                            
-                            if i_< 0: #removes neg index
-                                continue
-                            elif i_>self.x_num_points -1: #removes ref to points beyond x_end
-                                continue
+                        A[cur_row, cur_row] = centre_coeff
+
+                        for i_ in [a for a in range(i-2, i+3) if a >= 0 and a <= self.x_num_points-1]:
+
                             if i_ == i:
-                                for j_ in [a for a in range(j-2,j+3) if not a == j]: 
-                                    if j_<0:
-                                        continue
-                                    elif j_>self.y_num_points - 1:
-                                        continue
-                                    
-                                    coef_index = j_- (j -1)
-                                    A[cur_row,ix(i,j_)] = Ylap_coef_list[coef_index]
+                                for j_ in [a for a in range(j-2, j+3) if a > 0 and not a == j and a <= self.y_num_points - 1]:
+
+                                    if j_ > j:
+                                        coef_index = j_ - (j - 1)
+                                    else:
+                                        coef_index = j_ - (j - 2)
+
+                                    A[cur_row, ix(
+                                        i, j_)] = Ylap_coef_list[coef_index]
                             else:
-                                coef_index = i_ - (i -1)
-                                A[cur_row,ix(i_,j)] = Xlap_coef_list[coef_index]
-                                
-                                        
+                                if i_ > i:
+                                    coef_index = i_ - (i - 1)
+                                else:
+                                    coef_index = i_ - (i - 2)
+                                A[cur_row, ix(i_, j)
+                                  ] = Xlap_coef_list[coef_index]
 
                                 """
                                 A[cur_row,ix(i+2,j)] = -tau/ alpha
@@ -271,33 +280,38 @@ class wave:
                                 """
 
             new_time_quantities_vector = A@cur_quantities_vector - prev_quantities_vector
+            """
             print("A")
-            for i in range(len(A)): 
-                a = [round(a,1) for a in A[i]]
+            for i in range(len(A)):
+                a = [round(a, 1) for a in A[i]]
                 print(a)
 
             print("cur_quantities_vector")
             A = self.convert_vector_to_matrix(cur_quantities_vector)
-            for i in range(len(A)): 
-                a = [round(a,1) for a in A[i]]
+            for i in range(len(A)):
+                a = [round(a, 1) for a in A[i]]
                 print(a)
-            
+
             print("prev_quantities_vector")
             A = self.convert_vector_to_matrix(prev_quantities_vector)
-            for i in range(len(A)): 
-                a = [round(a,1) for a in A[i]]
+            for i in range(len(A)):
+                a = [round(a, 1) for a in A[i]]
                 print(a)
+
+            """
 
             """
             here
             """
 
-            Q_matrix = self.convert_vector_to_matrix(new_time_quantities_vector)
+            Q_matrix = self.convert_vector_to_matrix(
+                new_time_quantities_vector)
 
-            
-            ax.cla()
+            # ax.cla()
+            fig = plt.figure(figsize=(10, 10))
+            ax = fig.add_subplot(111, projection='3d')
 
-            ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
+            # ax.plot(self.x_start, self.y_start, 0,color="k", marker="*", markersize=30)
             ax.plot_surface(X, Y, Q_matrix, cmap='viridis')
 
             plt.draw()
@@ -306,39 +320,39 @@ class wave:
             ax.set_ylabel('Y-axis')
             ax.set_zlabel('Z-axis')
             ax.set_title(f'3D Surface Plot (t = {t})')
-            ax.set_zlim(-6,6)
+            ax.set_zlim(-2, 2)
 
             plt.pause(10)
             t += self.dt
 
-        
     def explicit_FTCS_h2(self, initial_field_matrix: np.ndarray):
-        
         """
         solves FTCS with spatial accuracy of  O(h^2)
         """
 
         nm_length = self.x_num_points*self.y_num_points
 
-        vector_per_position = np.zeros(nm_length, dtype= np.float32)
+        vector_per_position = np.zeros(nm_length, dtype=np.float32)
 
         extra_vals_per_position = vector_per_position.copy()
 
-        ix = lambda x, y: self.ix(x, y)
-        xi = lambda ix: self.xi(ix)
+        def ix(x, y): return self.ix(x, y)
+        def xi(ix): return self.xi(ix)
 
-        #methods
-        def fill_all_position_matrix(cur_pos_vector,i,j):
-            #fills in "all position" matrix
+        # methods
+        def fill_all_position_matrix(cur_pos_vector, i, j):
+            # fills in "all position" matrix
             extra_vals_per_position[ix(
-                    i, j)] = -1 * (prev_quantities_vector[ix(i, j)])
+                i, j)] = -1 * (prev_quantities_vector[ix(i, j)])
 
-            all_position_coeff_matrix[ix(i,j)][:] = cur_pos_vector
+            all_position_coeff_matrix[ix(i, j)][:] = cur_pos_vector
 
-
-        quantities_all_time_tensor = np.zeros([self.time_num_points,self.y_num_points,self.x_num_points],dtype=np.float32) #matrix where [ [quantities @all pos @ t = 0], [quantities @all pos @ t = 0 +dt ]..... ]
-        quantities_all_time_matrix = np.zeros([self.time_num_points,nm_length])
-        A = np.eye(nm_length, dtype = np.float32)
+        # matrix where [ [quantities @all pos @ t = 0], [quantities @all pos @ t = 0 +dt ]..... ]
+        quantities_all_time_tensor = np.zeros(
+            [self.time_num_points, self.y_num_points, self.x_num_points], dtype=np.float32)
+        quantities_all_time_matrix = np.zeros(
+            [self.time_num_points, nm_length])
+        A = np.eye(nm_length, dtype=np.float32)
 
         """
         Ax = b
@@ -371,28 +385,30 @@ class wave:
         ax.set_ylabel('Y Label')
         ax.set_zlabel('Z Label')
         plt.show()
- 
+
         for ti in range(self.time_num_points):
             time = self.time_points[ti]
             print(f'time = {time}')
 
             # initial field @t =0
             if time == 0:
-                if not self.initialised_field: #ICs
+                if not self.initialised_field:  # ICs
                     raise ValueError(f'Initial Field not passed')
 
-                prev_quantities_vector = self.convert_matrix_to_vector(initial_field_matrix)
-                quantities_all_time_matrix[ti][:] = prev_quantities_vector #needs to updated for t>0
-                quantities_all_time_tensor[ti][:][:] = self.convert_vector_to_matrix(prev_quantities_vector)
+                prev_quantities_vector = self.convert_matrix_to_vector(
+                    initial_field_matrix)
+                # needs to updated for t>0
+                quantities_all_time_matrix[ti][:] = prev_quantities_vector
+                quantities_all_time_tensor[ti][:][:] = self.convert_vector_to_matrix(
+                    prev_quantities_vector)
 
-                #plot vals
+                # plot vals
                 Z = initial_field_matrix
                 ax = fig.add_subplot(111, projection='3d')
 
                 # Plot the (x, y, z) data points
                 # ax.plot_wireframe(X, Y, Z, rstride=10, cstride=10)
-                ax.plot([self.x_start, self.x_start], [self.y_start,
-                        self.y_start], [-1.5, 1.5], c="k", marker="*")
+                # ax.plot([self.x_start, self.x_start], [self.y_start,self.y_start], [-1.5, 1.5], c="k", marker="*")
                 ax.plot_surface(X, Y, Z, cmap='jet')
 
                 # Add labels
@@ -401,37 +417,42 @@ class wave:
                 ax.set_zlabel('Z Label')
                 ax.set_title(f'time = {time}')
                 plt.show()
-                
+
                 continue
-            
-            all_position_coeff_matrix = np.zeros([nm_length,nm_length], dtype=np.float32)
-            
+
+            all_position_coeff_matrix = np.zeros(
+                [nm_length, nm_length], dtype=np.float32)
+
             # t> 0
             for j in range(self.y_num_points):
                 for i in range(self.x_num_points):
                     x = self.x_points[i]
                     y = self.y_points[j]
 
-                    curr_position_quantities_vector = np.zeros(nm_length, dtype = np.float32)
-                    
-                    #all BCs 
+                    curr_position_quantities_vector = np.zeros(
+                        nm_length, dtype=np.float32)
+
+                    # all BCs
                     if x in self.x_range and y in self.y_range:
-                        #corners
+                        # corners
                         curr_position_quantities_vector[ix(i, j)] = (self.alpha*2*self.dy + prev_quantities_vector[ix(
-                                        i, abs(j-2))] + self.alpha*2*self.dx + prev_quantities_vector[ix(abs(i-2), j)]) * 0.5
-                        fill_all_position_matrix(curr_position_quantities_vector,i,j)
+                            i, abs(j-2))] + self.alpha*2*self.dx + prev_quantities_vector[ix(abs(i-2), j)]) * 0.5
+                        fill_all_position_matrix(
+                            curr_position_quantities_vector, i, j)
                         continue
                     elif x in self.x_range:
-                        #left right
+                        # left right
                         curr_position_quantities_vector[ix(
-                                    i, j)] = self.alpha*2*self.dx + prev_quantities_vector[ix(abs(i-2), j)]
-                        fill_all_position_matrix(curr_position_quantities_vector,i,j)
+                            i, j)] = self.alpha*2*self.dx + prev_quantities_vector[ix(abs(i-2), j)]
+                        fill_all_position_matrix(
+                            curr_position_quantities_vector, i, j)
                         continue
                     elif y in self.y_range:
-                        #top bott
+                        # top bott
                         curr_position_quantities_vector[ix(
-                                    i, j)] = self.alpha*2*self.dy + prev_quantities_vector[ix(i, abs(j-2))]
-                        fill_all_position_matrix(curr_position_quantities_vector,i,j)
+                            i, j)] = self.alpha*2*self.dy + prev_quantities_vector[ix(i, abs(j-2))]
+                        fill_all_position_matrix(
+                            curr_position_quantities_vector, i, j)
                         continue
                     elif x in self.x_range or y in self.y_range:
                         raise ValueError(f'{x,y} in BC but not implemented')
@@ -444,19 +465,24 @@ class wave:
                     """
                     alpha = (self.c*self.dt)**2
                     # right point
-                    curr_position_quantities_vector[ix(i+1,j)] = alpha/self.dx**2
-                    
+                    curr_position_quantities_vector[ix(
+                        i+1, j)] = alpha/self.dx**2
+
                     # left point
-                    curr_position_quantities_vector[ix(i-1,j)] = alpha/self.dx**2
+                    curr_position_quantities_vector[ix(
+                        i-1, j)] = alpha/self.dx**2
 
                     # top point
-                    curr_position_quantities_vector[ix(i,j+1)] = alpha/self.dy**2
+                    curr_position_quantities_vector[ix(
+                        i, j+1)] = alpha/self.dy**2
 
                     # bott point
-                    curr_position_quantities_vector[ix(i,j-1)] = alpha/self.dy**2
+                    curr_position_quantities_vector[ix(
+                        i, j-1)] = alpha/self.dy**2
 
                     # centre point
-                    curr_position_quantities_vector[ix(i,j)] = 2*(1 - alpha/(self.dx**2)- alpha/(self.dy**2))
+                    curr_position_quantities_vector[ix(
+                        i, j)] = 2*(1 - alpha/(self.dx**2) - alpha/(self.dy**2))
 
                     # references previous time value for position
 
@@ -464,13 +490,13 @@ class wave:
                         extra_vals_per_position[ix(
                             i, j)] = -1 * (prev_quantities_vector[ix(i, j)])
 
-                    
                     else:
                         extra_vals_per_position[ix(
                             i, j)] = -1 * (quantities_all_time_matrix[ti-1][ix(i, j)])
-                        
-                    all_position_coeff_matrix[ix(i,j)][:] = curr_position_quantities_vector
-            
+
+                    all_position_coeff_matrix[ix(
+                        i, j)][:] = curr_position_quantities_vector
+
                     """
                     TODO:
                     create a vectors that will be passed into the sparse matrix: 
@@ -484,35 +510,35 @@ class wave:
             c = prev_quantities_vector.copy()
             b = B @ c
 
-            b += extra_vals_per_position #all known quantities derived here!!
+            b += extra_vals_per_position  # all known quantities derived here!!
 
             quantities_new_timestep = np.linalg.inv(A) @ b
 
-            
             prev_quantities_vector = quantities_new_timestep.copy()
             quantities_all_time_matrix[ti][:] = prev_quantities_vector
 
-            quantities_all_time_tensor[ti][:][:] = self.convert_vector_to_matrix(prev_quantities_vector)
+            quantities_all_time_tensor[ti][:][:] = self.convert_vector_to_matrix(
+                prev_quantities_vector)
 
-            #plot vals
+            # plot vals
             plt.cla()
             ax = fig.add_subplot(111, projection='3d')
 
             # Plot the (x, y, z) data points
             # ax.plot_wireframe(X, Y, Z, rstride=10, cstride=10)
-            ax.plot([self.x_start, self.x_start], [self.y_start,
-                    self.y_start], [-1.5, 1.5], c="k", marker="*")
+            # ax.plot([self.x_start, self.x_start], [self.y_start,self.y_start], [-1.5, 1.5], c="k", marker="*")
 
             # Add labels
             ax.set_xlabel('X Label')
             ax.set_ylabel('Y Label')
             ax.set_zlabel('Z Label')
             ax.set_title(f'time = {time}')
-            ax.plot_surface(X, Y, self.convert_vector_to_matrix(prev_quantities_vector), cmap='jet')
-    
+            ax.plot_surface(X, Y, self.convert_vector_to_matrix(
+                prev_quantities_vector), cmap='jet')
+
         self.wave_tensor = quantities_all_time_tensor
-    
-    def print_all_time_tensor(self, delay_time = 3):
+
+    def print_all_time_tensor(self, delay_time=3):
         """
         spatial_matrix = np.array([self.x_num_points, self.y_num_points], dtype = np.float32)
         temporal_spatial_matrix = np.array(
@@ -533,18 +559,19 @@ class wave:
         quantities_all_time_tensor = self.wave_tensor
         # print the quantities: Q(x,y) over time
         X, Y = np.meshgrid(self.x_points, self.y_points)
-        fig = plt.figure(figsize = (10,10))
+        fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(111, projection='3d')
         Z = quantities_all_time_tensor[0, :, :]
-        ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
+        ax.plot(self.x_start, self.y_start, 0,
+                color="k", marker="*", markersize=30)
         ax.plot_surface(X, Y, Z, cmap='viridis')
         ax.set_xlabel('X-axis')
         ax.set_ylabel('Y-axis')
         ax.set_zlabel('Z-axis')
         ax.set_title(f'3D Surface Plot (t = {self.time_points[0]})')
-        ax.set_zlim(-6,6)
+        ax.set_zlim(-6, 6)
 
-        ax.view_init(elev = 90, azim = 0 )
+        ax.view_init(elev=90, azim=0)
 
         if not delay_time:
             delay_time = 3
@@ -555,52 +582,48 @@ class wave:
             plt.pause(delay_time)
             plt.clf()
 
-            iter+=1
+            iter += 1
             iter = iter % self.time_num_points
-            if iter == 0:#  self.time_num_points:
+            if iter == 0:  # self.time_num_points:
                 break
-            
-            fig = plt.figure(figsize = (10,10))
+
+            fig = plt.figure(figsize=(10, 10))
             ax = fig.add_subplot(111, projection='3d')
             Z = quantities_all_time_tensor[0, :, :]
-            ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
+            ax.plot(self.x_start, self.y_start, 0,
+                    color="k", marker="*", markersize=30)
             ax.plot_surface(X, Y, Z, cmap='viridis')
             ax.set_xlabel('X-axis')
             ax.set_ylabel('Y-axis')
             ax.set_zlabel('Z-axis')
             ax.set_title(f'3D Surface Plot (t = {self.time_points[0]})')
-            #ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
+            # ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
 
-            Z = np.clip(quantities_all_time_tensor[iter, :, :],-2,2)
-            #print(f'time = {self.time_points[iter]}')
-            #print(Z)
+            Z = np.clip(quantities_all_time_tensor[iter, :, :], -2, 2)
+            # print(f'time = {self.time_points[iter]}')
+            # print(Z)
             ax.plot_surface(X, Y, Z, cmap='viridis')
-            
+
             ax.set_xlabel('X-axis')
             ax.set_ylabel('Y-axis')
             ax.set_zlabel('Z-axis')
             ax.set_title(f'3D Surface Plot (t = {self.time_points[iter]})')
-            ax.set_zlim(-6,6)
-
-
-            
+            ax.set_zlim(-6, 6)
 
     def solve_using_pde_fd(self):
-        #row major numbering
+        # row major numbering
         Z_initial = self.initiliaze_field_()
         self.explicit_FTCS_h4(Z_initial)
-        #self.print_all_time_tensor()
-
+        # self.print_all_time_tensor()
 
     def ix(self, i, j):
-        return (j*(self.x_num_points)) + i 
+        return (j*(self.x_num_points)) + i
 
     def xi(self, ix):
-        #remeber its row major numbering !!
+        # remeber its row major numbering !!
         j = ix // (self.x_num_points)
         i = ix % (self.x_num_points)
-        return i,j
-
+        return i, j
 
     def print_Z(self, Z):
 
