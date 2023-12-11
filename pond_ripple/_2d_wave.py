@@ -2,19 +2,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 from matplotlib import animation
+import pandas as pd
+
+from pathlib import *
+import os
+import importlib
 
 class wave:
 
-    def __init__(self, start_point):
+    def __init__(self, start_point, dx,dy,c):
 
-        self.wave_origin = start_point
+        self.start_point = start_point
 
         # wave pde params
-        self._c = 1  # velocity of the waves
+        self._c = c  # velocity of the waves
 
         # spatial terms
-        self._dx = 0.5
-        self._dy = self._dx
+        self._dx = dx
+        self._dy = dy
 
         self.x_range = [0,30]
         self.y_range = self.x_range
@@ -45,13 +50,6 @@ class wave:
         #initialised field?
         self.is_initialised = False
 
-        # temporal terms                                                                                                                                                                                                  
-        self._dt = 1 #self.CFL_dt()#CFL condition
-        self.time_end = 1
-
-        self.time_points = np.arange(0, self.time_end+self.dt, self.dt)
-        self.time_num_points = len(self.time_points)
-
         #plot animation
         self._animate_figure = True
 
@@ -64,8 +62,17 @@ class wave:
         self._A = None
         self._initial_field = None
 
-        #independent variables for CFL investigation 
-        self._CFL = None
+        #dt stability study 
+        self.excel_file = "stability_values.xlsx"
+
+        # temporal terms                                                                                                                                                                                                  
+        self._dt = self._dt_stability_study() #CFL condition
+        self.time_end = 2
+
+        self.time_points = np.arange(0, self.time_end+self.dt, self.dt)
+        self.time_num_points = len(self.time_points)
+
+        
     
     
     #for viewing the plot: either animate plots or produce individual plots for each timestep
@@ -147,15 +154,45 @@ class wave:
             for j in range(y_num):
                 vector[ix(i, j)] = matrix[j][i]
         return vector
+    
+    def dt_error(self):
+        print(f'dx ={self.dx}, dy ={self.dy}, c ={self.c}')
 
-    def CFL_dt(self):
-        CFL = 3
-        dt_x = self.dx/self.c*CFL
-        dt_y = self.dy/self.c*CFL
+        raise ValueError("\ndt_error, needs a study!")
 
-        print(f' dt_x :{dt_x}, dt_y:{dt_y}')
+    def _dt_stability_study(self):
+        """
+        finds dt according to a stability study 
+        """
+        
+        if self.excel_file in os.listdir(os.getcwd()): #if file already exists
 
-        return min(dt_x,dt_y)
+            df = pd.read_excel(self.excel_file)
+            print(f'dt_stability:\n{df}')
+
+            if not "c" in df.columns():
+                
+            if not self.c in df["c"]:
+                #if self.c is not in data file --> run another study with the self.c
+                self.dt_error()
+
+            #sorts into ascending order
+            df.sort_values(by=['dx'], ascending = True, inplace=True)
+            #h = df["h"][0]
+            
+            c_index_range = [i for i in range(len(df)) if df["c"][i]==self.c]
+            df["dx_c"] = df["dx"][c_index_range]
+            df["dx_diff"] = abs(df["dx"][c_index_range] - self.dx)
+            df["dy_diff"] = abs(df["dy"] - self.dy)
+            df["diff_sum"] = df["dx_diff"] + df["dy_diff"]
+                
+            dt_index = df["diff_sum"].idxmin() 
+            dt = df["dt"][dt_index]
+
+            return dt * 0.8
+        else: #if file doesnt already exists
+            self.dt_error()
+
 
     def convert_vector_to_matrix(self, vector: np.ndarray):
         """
@@ -761,6 +798,8 @@ class wave:
 
 
 if __name__ == "__main__":
+    dx = dy = 0.5
+    c = 1
     start_point = [10, 10]
-    sim = wave(start_point)
+    sim = wave(start_point, dx,dy,c)
     sim.run()
