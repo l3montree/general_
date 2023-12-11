@@ -1,19 +1,7 @@
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
-
 import matplotlib.pyplot as plt
 import csv
-
-import inspect
-
-import time
-
-import scipy
-
-from matplotlib.animation import FuncAnimation
-
-import math
-
+from matplotlib import animation
 
 class wave:
 
@@ -22,119 +10,134 @@ class wave:
         self.wave_origin = start_point
 
         # wave pde params
-        self.c = 1  # velocity of the waves
+        self._c = 1  # velocity of the waves
 
         # spatial terms
-        self.dx = 1
-        self.dy = self.dx
+        self._dx = 0.5
+        self._dy = self._dx
 
-        self.x_range = [0, 50]
+        self.x_range = [0,30]
         self.y_range = self.x_range
 
+        self.cellsize = 1
+
+        #start point
+        """
+        initial field Q(x,y,t= 0) = 0 for all dimensions except Q((x,y) = (startpoint), t=0) = 1
+        """
         self.x_start = start_point[0]
         self.y_start = start_point[1]
 
-        if not (self.x_range[1] - self.x_start) < (self.x_range[1] - self.x_range[0]) or not (self.y_range[1] - self.y_start) < (self.y_range[1] - self.y_range[0]):
+        if self.x_start < self.x_range[0] or self.x_start> self.x_range[1] or self.y_start < self.y_range[0] or self.y_start> self.y_range[1]:
             raise ValueError(
                 f'({self.x_start,self.y_start}) not between xrange: ({self.x_range}) and/or yrange: ({self.y_range})')
 
+        # x,y points
         self.x_points = np.arange(
-            self.x_range[0], self.x_range[1] + self.dx, self.dx, dtype=int)
+            self.x_range[0], self.x_range[1] + self.dx, self.dx, dtype=np.float32)
 
         self.y_points = np.arange(
-            self.y_range[0], self.y_range[1] + self.dy, self.dy, dtype=int)
+            self.y_range[0], self.y_range[1] + self.dy, self.dy, dtype=np.float32)
 
         self.x_num_points = len(self.x_points)
         self.y_num_points = len(self.y_points)
 
-        # temporal terms
-        self.dt = 1/self.c*(1/self.dx+1/self.dy)**-1
-        self.time_end = self.dt*100
+        #initialised field?
+        self.is_initialised = False
+
+        # temporal terms                                                                                                                                                                                                  
+        self._dt = 1 #self.CFL_dt()#CFL condition
+        self.time_end = 1
 
         self.time_points = np.arange(0, self.time_end+self.dt, self.dt)
         self.time_num_points = len(self.time_points)
 
-        # bc params
-        self.alpha = 1  # neumann
+        #plot animation
+        self._animate_figure = True
 
-        # deugging
-        self.csv_iter = 1
+        #local variables for iteration
+        self._is_iteration = False
+        self.iteration_iter = 0
+        self._cur_quantities_vector = None
+        self._prev_quantities_vector = None
+        self._cur_time = None
+        self._A = None
+        self._initial_field = None
 
-        # printing solution params
-        self.delay_time = self.dt
+        #independent variables for CFL investigation 
+        self._CFL = None
+    
+    
+    #for viewing the plot: either animate plots or produce individual plots for each timestep
+    @property
+    def animate_figure(self):
+        return self._clear_figure
+    @animate_figure.setter
+    def animate_figure(self,bool):
+        if bool.lower() == "true":
+            self._animate_figure = True
+        if bool.lower() == "false":
+            self._animate_figure = False
+    
+    #independent variables for CFL investigation
+    @property
+    def CFL(self):
+        return self._CFL
+    @CFL.setter
+    def CFL(self,val):
+        self._CFL = val
+    
+    @property
+    def dx(self):
+        return self._dx
+    @dx.setter
+    def dx(self,val):
+        self._dx = val
+    
+    @property
+    def dy(self):
+        return self._dy
+    @dy.setter
+    def dy(self,val):
+        self._dy = val
+    
+    @property
+    def dt(self):
+        return self._dt
+    @dt.setter
+    def dt(self,val):
+        self._dt = val
+    
+    @property
+    def c(self):
+        return self._c
+    @c.setter
+    def c(self,val):
+        self._c = val
 
-        # initialise params
-        self.initialised_field = False
 
-        # sim
-        self.solve_using_pde_fd()
+    def run(self):
+        field = self.initiliaze_field_()
+        print(f'Field initialised. Q(x,y,t = 0)')
+        print(f'FDA: {self.explicit_FTCS_h4.__name__}')
+        self.explicit_FTCS_h4(field)
 
     def initiliaze_field_(self):
-        nm_len = self.x_num_points*self.y_num_points
 
         field = np.zeros(
             [self.y_num_points, self.x_num_points], dtype=np.float32)
 
         midpoint = (int(self.y_num_points/2), int(self.x_num_points/2))
 
-        field[int(self.y_num_points/2), int(self.x_num_points/2)] = 1
-        self.initialised_field = True
+        field[midpoint] = 1
+        self.is_initialised = True
 
-        return field
-
-    def initiliaze_field_convex_wave(self):
-        field = np.zeros([self.y_num_points, self.x_num_points])
-        #####
-        """
-        fix initial field
-            how to create a convex wave with radius = drop radius, suppose to represent a drop of water on the pond
-        """
-        #####
-
-        # you want a convex wave
-        A = 1
-        radius = 5
-        x0, y0 = self.x_start, self.y_start
-        def wave_func(x, y): return 0.5*A*(np.sin((x-x0)/(4*radius)*2 *
-                                                  np.pi + np.pi/2) + np.sin((y-y0)/(4*radius)*2*np.pi + np.pi/2))
-        """
-        wave eqn
-        https://www.wolframalpha.com/input?i=3d+plot+sin%28x%2F%284*r%29*2*pi%2Bpi%2F2%29+%2B+sin%28y%2F%28r*4%29*2*pi%2Bpi%2F2%29+for+r+%3D+5
-        """
-
-        i_centre = (self.x_start//self.dx)
-        j_centre = (self.y_start//self.dy)
-
-        i_var = radius//self.dx*1.1
-        j_var = radius//self.dy*1.1
-
-        for i in range(int(i_centre - i_var), int(i_centre + i_var)):
-            for j in range(int(j_centre - j_var), int(j_centre + j_var)):
-                if i < 0 or j < 0:
-                    raise ValueError(f'i,j = {i,j}, which is wrong!!!')
-                x = self.x_points[i]
-                y = self.y_points[j]
-                # print(f'x,y = {x,y}')
-
-                if (np.power(x-self.x_start, 2) + np.power(y-self.y_start, 2) > np.power(radius, 2)):
-                    continue
-
-                if wave_func(x, y) > 0:
-                    # print(f'i,j = {i,j} x,y = {x,y} , wave_func = {wave_func(x,y)}')
-                    field[j][i] = 1  # wave_func(x,y)
-
-        self.initialised_field = True
-
-        # self.print_Z(field)
-
-        """
-         with open('initialised_data.csv', 'w', newline='') as csvfile:
-            csvwriter = csv.writer(csvfile)
-            csvwriter.writerows(field)
-        """
         return field
 
     def convert_matrix_to_vector(self, matrix: np.ndarray):
+        """
+        Converts matrix of dimension (m,n) to vector of dimension (1,mxn) using row major numbering
+        """
         y_num, x_num = matrix.shape
         nm_len = int(x_num*y_num)
         vector = np.zeros(nm_len)
@@ -145,7 +148,19 @@ class wave:
                 vector[ix(i, j)] = matrix[j][i]
         return vector
 
+    def CFL_dt(self):
+        CFL = 3
+        dt_x = self.dx/self.c*CFL
+        dt_y = self.dy/self.c*CFL
+
+        print(f' dt_x :{dt_x}, dt_y:{dt_y}')
+
+        return min(dt_x,dt_y)
+
     def convert_vector_to_matrix(self, vector: np.ndarray):
+        """
+        inverse of above
+        """
         def xi(ix): return self.xi(ix)
 
         matrix = np.zeros(
@@ -154,7 +169,7 @@ class wave:
         for ix in range(len(vector)):
             i, j = xi(ix)
             """
-               print(f'ix = {ix}')
+            print(f'ix = {ix}')
             print(f"vector[ix] = {vector[ix]}")
             print(f"i j = ({i,j}) ")
             """
@@ -163,6 +178,11 @@ class wave:
         return matrix
 
     def explicit_FTCS_h4(self, initial_field_matrix):
+        """
+        Explicit Finite difference approximation using:
+            - Time: centred difference O(h^2)
+            - space: centred difference O(h^4)
+        """
 
         # matrix -  vector conversions
         def ix(i, j): return self.ix(i, j)
@@ -171,159 +191,214 @@ class wave:
         nm_len = int(self.x_num_points*self.y_num_points)
 
         # initilise matrixs/vectors
-        all_time_tensor = np.zeros(
-            [self.time_num_points, self.y_num_points, self.x_num_points], dtype=np.float32)
         vectors_per_pos_matrix = np.zeros([nm_len, nm_len], dtype=np.float32)
-        Q_matrix_per_time = np.zeros(
-            [self.y_num_points, self.x_num_points], dtype=np.float32)
+
+        
+        # constants in the finite difference
+        tau = (self.c * self.dt)**2
+        alpha = 12*self.dx**2
+        beta = 12*self.dy**2
+
+        #laplacian coefficients
+        Xlap_coef_list = [-tau / alpha, 16*tau /
+                            alpha, 16*tau / alpha, -tau / alpha]
+        Ylap_coef_list = [-tau / beta, 16 *
+                            tau / beta, 16*tau / beta, -tau / beta]
+        centre_coeff = (-30/alpha - 30/beta + 2/tau)*tau
 
         # initial field vector
         initial_field_vector = self.convert_matrix_to_vector(
             initial_field_matrix)
-
-        # solving
+        
+        #loop variable init
         t = 0
 
-        while True:  # for t in range(self.time_num_points):
-            # time_ = self.time_points[t]
+        #plot variables init
+        X,Y = np.meshgrid(self.x_points,self.y_points)
 
-            A = vectors_per_pos_matrix.copy()
+        #label plot function
+        def _plot_surface(ax,X,Y,Z,t):
+            ax.plot_surface(X, Y, Z, cmap='jet')
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_zlabel('Q')
+            ax.set_title(f"2D Wave Finite Diff Approx @ t = {round(t,2)}")
+            zMax = 2
+            ax.set_zlim(-2*zMax,2*zMax)
+            return ax
+        
+        A = vectors_per_pos_matrix.copy()
 
-            # constants in the finite difference
-            tau = (self.c * self.dt)**2
-            alpha = 12*self.dx**2
-            beta = 12*self.dy**2
 
-            # X laplacian coef
-            Xlap_coef_list = [-tau / alpha, 16*tau /
-                              alpha, 16*tau / alpha, -tau / alpha]
-            Ylap_coef_list = [-tau / beta, 16 *
-                              tau / beta, 16*tau / beta, -tau / beta]
-            centre_coeff = (-30/alpha - 30/beta + 2/tau)*tau
+        if not self._is_iteration:
+            while True: 
 
-            if t == 0:  # initialises cur_quantities and prev_quanities
-                cur_quantities_vector = initial_field_vector.copy()
-                prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
+                # time_ = self.time_points[t]
 
-                # initialise plot
-                plt.ion()
-                X, Y = np.meshgrid(self.x_points, self.y_points)
-                fig = plt.figure(figsize=(10, 10))
-                ax = fig.add_subplot(111, projection='3d')
-                Z = initial_field_matrix
+                if t == 0:  # initialises cur_quantities and prev_quanities
+                    _cur_quantities_vector = initial_field_vector.copy()
+                    _prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
 
-                # ax.plot(self.x_start,self.y_start,0,color = "k", marker= "*", markersize = 30)
-                ax.plot_surface(X, Y, Z, cmap='viridis')
+                    # initialise plot
+                    fig = plt.figure()
+                    ax = plt.axes(projection='3d')
+                    #plt.show()
 
+                    Z = initial_field_matrix
+                    ax = _plot_surface(ax,X,Y,Z,t)
+
+                    plt.show()
+                    
+                    # plt.pause(10)
+                    t += self.dt
+
+                    for i in range(self.x_num_points):
+                        for j in range(self.y_num_points):
+                            cur_row = ix(i, j)  # cur_row in A
+
+                            # BC --> dirichelet
+                            if i in [0, self.x_num_points-1] or j in [0, self.y_num_points-1]:
+                                A[cur_row, ix(i, j)] = 0
+
+                            else:  # [(2:xend-2),(2:yend-2)]
+                                # non BC points
+
+                                A[cur_row, cur_row] = centre_coeff
+
+                                for i_ in [a for a in range(i-2, i+3) if a >= 0 and a <= self.x_num_points-1]:
+
+                                    if i_ == i:
+                                        for j_ in [a for a in range(j-2, j+3) if a > 0 and not a == j and a <= self.y_num_points - 1]:
+
+                                            if j_ > j:
+                                                coef_index = j_ - (j - 1)
+                                            else:
+                                                coef_index = j_ - (j - 2)
+
+                                            A[cur_row, ix(
+                                                i, j_)] = Ylap_coef_list[coef_index]
+                                    else:
+                                        if i_ > i:
+                                            coef_index = i_ - (i - 1)
+                                        else:
+                                            coef_index = i_ - (i - 2)
+                                        A[cur_row, ix(i_, j)
+                                        ] = Xlap_coef_list[coef_index]
+
+                                        """
+                                        A[cur_row,ix(i+2,j)] = -tau/ alpha
+                                        A[cur_row,ix(i+1,j)] = 16*tau/ alpha
+                                        A[cur_row,ix(i-1,j)] = 16*tau/ alpha
+                                        A[cur_row,ix(i-2,j)] = -tau/ alpha
+
+                                        A[cur_row,ix(i,j+2)] = -tau/ beta
+                                        A[cur_row,ix(i,j+1)] = 16*tau/ beta
+                                        A[cur_row,ix(i,j-1)] = 16*tau/ beta
+                                        A[cur_row,ix(i,j-2)] = -tau/ beta
+                                        """
+
+                else:
+                    # updates the vectors
+                    _prev_quantities_vector = _cur_quantities_vector.copy()
+                    _cur_quantities_vector = new_time_quantities_vector.copy()
+
+                
+
+                new_time_quantities_vector = A@_cur_quantities_vector - _prev_quantities_vector
+                """
+                print("A")
+                for i in range(len(A)):
+                    a = [round(a, 1) for a in A[i]]
+                    print(a)
+
+                print("cur_quantities_vector")
+                A = self.convert_vector_to_matrix(cur_quantities_vector)
+                for i in range(len(A)):
+                    a = [round(a, 1) for a in A[i]]
+                    print(a)
+
+                print("prev_quantities_vector")
+                A = self.convert_vector_to_matrix(prev_quantities_vector)
+                for i in range(len(A)):
+                    a = [round(a, 1) for a in A[i]]
+                    print(a)
+
+                """
+
+                Q_matrix = self.convert_vector_to_matrix(
+                    new_time_quantities_vector)
+                
+                Z = Q_matrix #needed to update the animation
+
+                if self.clear_figure:
+                    ax.cla()
+                else:
+                    plt.figure()
+                    ax = plt.axes(projection='3d')
+
+                ax = _plot_surface(ax,X,Y,Z,t)
                 plt.draw()
+                plt.show()
 
-                ax.set_xlabel('X-axis')
-                ax.set_ylabel('Y-axis')
-                ax.set_zlabel('Z-axis')
-                ax.set_title(f'3D Surface Plot (t = {t})')
-                ax.set_zlim(-2, 2)
+                plt.pause(2)
 
-                # plt.pause(10)
                 t += self.dt
 
-            else:
-                # updates the vectors
-                prev_quantities_vector = cur_quantities_vector.copy()
-                cur_quantities_vector = new_time_quantities_vector.copy()
+        else:
+            self.iteration_iter+=1
+            #print(f'iteration, iter {self.iteration_iter}')
 
-            for i in range(self.x_num_points):
-                for j in range(self.y_num_points):
-                    cur_row = ix(i, j)  # cur_row in A
+            if not self._cur_time:  # initialises cur_quantities and prev_quanities
+                self._A = vectors_per_pos_matrix.copy()
+                self._cur_time = 0
+                self._cur_quantities_vector = initial_field_vector.copy()
+                self._prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
 
-                    if j == 5 and i == 5:
-                        print("")
+                self._cur_time += self.dt
 
-                    # BC --> dirichelet
-                    if i in [0, self.x_num_points-1] or j in [0, self.y_num_points-1]:
-                        A[cur_row, ix(i, j)] = 0
 
-                    else:  # [(2:xend-2),(2:yend-2)]
-                        # non BC points
+                for i in range(self.x_num_points):
+                    for j in range(self.y_num_points):
+                        cur_row = ix(i, j)  # cur_row in A
 
-                        A[cur_row, cur_row] = centre_coeff
+                        # BC --> dirichelet
+                        if i in [0, self.x_num_points-1] or j in [0, self.y_num_points-1]:
+                            A[cur_row, ix(i, j)] = 0
 
-                        for i_ in [a for a in range(i-2, i+3) if a >= 0 and a <= self.x_num_points-1]:
+                        else:  # [(2:xend-2),(2:yend-2)]
+                            # non BC points
 
-                            if i_ == i:
-                                for j_ in [a for a in range(j-2, j+3) if a > 0 and not a == j and a <= self.y_num_points - 1]:
+                            A[cur_row, cur_row] = centre_coeff
 
-                                    if j_ > j:
-                                        coef_index = j_ - (j - 1)
-                                    else:
-                                        coef_index = j_ - (j - 2)
+                            for i_ in [a for a in range(i-2, i+3) if a >= 0 and a <= self.x_num_points-1]:
 
-                                    A[cur_row, ix(
-                                        i, j_)] = Ylap_coef_list[coef_index]
-                            else:
-                                if i_ > i:
-                                    coef_index = i_ - (i - 1)
+                                if i_ == i:
+                                    for j_ in [a for a in range(j-2, j+3) if a > 0 and not a == j and a <= self.y_num_points - 1]:
+
+                                        if j_ > j:
+                                            coef_index = j_ - (j - 1)
+                                        else:
+                                            coef_index = j_ - (j - 2)
+
+                                        A[cur_row, ix(
+                                            i, j_)] = Ylap_coef_list[coef_index]
                                 else:
-                                    coef_index = i_ - (i - 2)
-                                A[cur_row, ix(i_, j)
-                                  ] = Xlap_coef_list[coef_index]
+                                    if i_ > i:
+                                        coef_index = i_ - (i - 1)
+                                    else:
+                                        coef_index = i_ - (i - 2)
+                                    A[cur_row, ix(i_, j)
+                                    ] = Xlap_coef_list[coef_index]
 
-                                """
-                                A[cur_row,ix(i+2,j)] = -tau/ alpha
-                                A[cur_row,ix(i+1,j)] = 16*tau/ alpha
-                                A[cur_row,ix(i-1,j)] = 16*tau/ alpha
-                                A[cur_row,ix(i-2,j)] = -tau/ alpha
 
-                                A[cur_row,ix(i,j+2)] = -tau/ beta
-                                A[cur_row,ix(i,j+1)] = 16*tau/ beta
-                                A[cur_row,ix(i,j-1)] = 16*tau/ beta
-                                A[cur_row,ix(i,j-2)] = -tau/ beta
-                                """
+            new_time_quantities_vector = A@self._cur_quantities_vector - self._prev_quantities_vector
 
-            new_time_quantities_vector = A@cur_quantities_vector - prev_quantities_vector
-            """
-            print("A")
-            for i in range(len(A)):
-                a = [round(a, 1) for a in A[i]]
-                print(a)
+            self._prev_quantities_vector = self._cur_quantities_vector.copy()
+            self._cur_quantities_vector = new_time_quantities_vector.copy()
 
-            print("cur_quantities_vector")
-            A = self.convert_vector_to_matrix(cur_quantities_vector)
-            for i in range(len(A)):
-                a = [round(a, 1) for a in A[i]]
-                print(a)
+            self._cur_time += self.dt
 
-            print("prev_quantities_vector")
-            A = self.convert_vector_to_matrix(prev_quantities_vector)
-            for i in range(len(A)):
-                a = [round(a, 1) for a in A[i]]
-                print(a)
 
-            """
-
-            """
-            here
-            """
-
-            Q_matrix = self.convert_vector_to_matrix(
-                new_time_quantities_vector)
-
-            # ax.cla()
-            fig = plt.figure(figsize=(10, 10))
-            ax = fig.add_subplot(111, projection='3d')
-
-            # ax.plot(self.x_start, self.y_start, 0,color="k", marker="*", markersize=30)
-            ax.plot_surface(X, Y, Q_matrix, cmap='viridis')
-
-            plt.draw()
-
-            ax.set_xlabel('X-axis')
-            ax.set_ylabel('Y-axis')
-            ax.set_zlabel('Z-axis')
-            ax.set_title(f'3D Surface Plot (t = {t})')
-            ax.set_zlim(-2, 2)
-
-            plt.pause(10)
-            t += self.dt
 
     def explicit_FTCS_h2(self, initial_field_matrix: np.ndarray):
         """
@@ -612,14 +687,23 @@ class wave:
 
     def solve_using_pde_fd(self):
         # row major numbering
-        Z_initial = self.initiliaze_field_()
-        self.explicit_FTCS_h4(Z_initial)
+        if not self._is_iteration:
+            Z_initial = self.initiliaze_field_()
+            self.explicit_FTCS_h4(Z_initial)
+        # self.print_all_time_tensor()
+        if self._is_iteration:
+            if not self.is_initialised:
+                self._initial_field = self.initiliaze_field_()
+            
+            self.explicit_FTCS_h4(self._initial_field)
         # self.print_all_time_tensor()
 
-    def ix(self, i, j):
+    
+    def ix( self,i, j):
         return (j*(self.x_num_points)) + i
 
-    def xi(self, ix):
+    
+    def xi( self,ix):
         # remeber its row major numbering !!
         j = ix // (self.x_num_points)
         i = ix % (self.x_num_points)
@@ -663,7 +747,20 @@ class wave:
         self.csv_iter += 1
         return self.csv_iter - 1
 
+    
+    def __iter__(self):
+        self._is_iteration = True
+        self.solve_using_pde_fd()
+        #print(f"iter = {self.iteration_iter}: dx = {self.dx}, dy = {self.dy}, dt ={self.dt}")
+        return self
+    
+    def __next__(self):
+        if not self._is_iteration:
+            raise StopIteration
+        
+
 
 if __name__ == "__main__":
     start_point = [10, 10]
-    wave_sim = wave(start_point)
+    sim = wave(start_point)
+    sim.run()
