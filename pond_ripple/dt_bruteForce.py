@@ -13,7 +13,7 @@ dt,dx,dy such that the solution is stable
 """
 
 
-class Dt_investigation:
+class BruteForce_dt:
     def __init__(self, dx,dy,c, start_point):
 
         self.dx = dx
@@ -54,23 +54,24 @@ class Dt_investigation:
         self._verbose= bool
     
 
-    def _CFL_case(self, dt,dx, dy):
+    def _dt_case_study(self, dt,dx, dy):
         sim = wave(self.start_point, dx,dy,self.c)
         sim.dt = dt
+        sim._is_stability_study = True
         
-        for i in range(10):
+        for i in range(20):
             iter(sim)
 
             cur_quantities_vector = sim._cur_quantities_vector
 
-            if abs(max(cur_quantities_vector)) > 10:
+            if abs(max(cur_quantities_vector)) > 2:
                 return False
 
         return True
 
     def run(self):
-        h_step = self.dx/2
-        dt_step = self.dx/3
+        h_step = self.dx/3
+        dt_step = self.dx/20
 
         dt_end = 2
 
@@ -78,34 +79,44 @@ class Dt_investigation:
         dy_list = dx_list.copy()
         dt_list = np.arange(dt_end,0,-dt_step)
 
-        data_dict = {"dt": [], "dx": [], "dy": [],"h":[], "c":[]}
+        data_dict = {"dt": [], "dx": [], "dy": [],"h_step":[], "c":[]}
 
         if not self.use_stored:
             print(f"self.use_stored = False, re-calculating data")
+            """
             for dx in dx_list:
                 for dy in dy_list:
-                    for dt in dt_list:
-                        #print(f'check: dx = {dx}, dy = {dy}, dt = {dt}')
-                        bool_ = self._CFL_case( dt,dx, dy)
+                    if dx == self.dx and dy == self.dy:
+                        print("dx == self.dx and dy == self.dy")
+            """
+            
+            for dt in dt_list:
+                #print(f'check: dx = {dx}, dy = {dy}, dt = {dt}')
+                dx = self.dx
+                dy = self.dy
 
-                        if bool_:
+                bool_ = self._dt_case_study( dt,dx, dy)
 
-                            if self.verbose:
-                                print(f'pass: dx = {dx}, dy = {dy}, dt = {dt}')
+                if bool_:
 
-                            data_dict["dt"].append(dt)
-                            data_dict["dy"].append(dy)
-                            data_dict["dx"].append(dx)
-                            data_dict["h"].append(h_step)
-                            data_dict["c"].append(self.c)
-                            break
-                            
-                        else:
-                            if self.verbose:
-                                print(f'fail: dx = {dx}, dy = {dy}, dt = {dt}')
+                    if self.verbose:
+                        print(f'pass: dx = {dx}, dy = {dy}, dt = {dt}')
+
+                    data_dict["dt"].append(dt)
+                    data_dict["dy"].append(dy)
+                    data_dict["dx"].append(dx)
+                    data_dict["h_step"].append(h_step)
+                    data_dict["c"].append(self.c)
+                    #break
+                    
+                else:
+                    if self.verbose:
+                        print(f'fail: dx = {dx}, dy = {dy}, dt = {dt}')
 
             d = pd.DataFrame(data=data_dict)
 
+            """
+            #consider if you want to append dfs of multiple c together
             if self.excel_file in os.listdir(os.getcwd()):
                 print(f'Old file present, reading')
                 df_old = pd.read_excel(self.excel_file)
@@ -113,9 +124,10 @@ class Dt_investigation:
                 print(f'Old file rewritten')
             else:
                 print("No files present, creating new one")
-
-            d.to_excel(self.excel_file)
+            """
             
+            print(f'new study complete')
+            d.to_excel(self.excel_file)
 
         else:
             print(f'self.use_stored = True, using old data file')
@@ -155,6 +167,7 @@ if __name__ == "__main__":
     dx =dy =0.5
     c = 1
     start_point = [10, 10]
-    sim = Dt_investigation(dx,dy,c, start_point)
+    sim = BruteForce_dt(dx,dy,c, start_point)
+    sim.verbose = True
     sim.run()
     sim.show_df()
