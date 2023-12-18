@@ -1,5 +1,5 @@
 # General
-General contains all current projects that I am working on.
+General contains all current projects that I am working on.\
 Projects or topics that I am particularly interested in are:
 - PDE approximations through Finite Element and/or Finite Diference
 - CFD simulations, currently focused on Ansys Fluent, however have plans to explore openFoam
@@ -23,6 +23,6 @@ Some work into understanding Finite Element Method
 ## Visa Free Fiji
 Shows the countrys in which fiji citizens gain visa free entry. Achieved through web scapping a website
 
-Thanks for visiting
+Thanks for visiting\
 ![](https://komarev.com/ghpvc/?username=l3montree)
 
