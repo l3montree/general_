@@ -74,6 +74,10 @@ class Wave:
         self.excel_file = "stability_values.xlsx"
         self._is_stability_study = False
 
+        #droplets
+        self._droplet_counter = 0
+        self.droplets = 3
+
     #for viewing the plot: either animate plots or produce individual plots for each timestep
     @property
     def animate_figure(self):
@@ -127,7 +131,11 @@ class Wave:
         self._use_CFL = bool
 
     def run(self):
-        field = self.initiliaze_field_()
+        points  = []
+        points.append()
+
+        field = self.single_drop_initialise(self.start_point)
+
 
         print(f'Field initialised. Q(x,y,t = 0)')
         print(f'FDA: {self.explicit_FTCS_h4.__name__}')
@@ -135,17 +143,19 @@ class Wave:
         self.explicit_FTCS_h4(field)
         print(f'self.run() complete')
 
-    def initiliaze_field_(self):
+    def single_drop_initialise(self, point):
         """
-        produces initial field with Q =0 everywhere except at start_point where Q(start_point) = 1"""
+        produces initial field with Q =0 everywhere except at start_point where Q(start_point) = 1
+        """
 
         field = np.zeros(
             [self.y_num_points, self.x_num_points], dtype=np.float32)
 
-        midpoint = (int(self.y_num_points/2), int(self.x_num_points/2))
+        midpoint = point
 
         field[midpoint] = 1
         self.is_initialised = True
+        self._drop_counter+=1
 
         return field
 
@@ -180,7 +190,7 @@ class Wave:
             print(f"vector[ix] = {vector[ix]}")
             print(f"i j = ({i,j}) ")
             """
-
+            
             matrix[j][i] = vector[ix]
         return matrix
     
@@ -408,8 +418,6 @@ class Wave:
             self._cur_quantities_vector = new_time_quantities_vector.copy()
 
             self._cur_time += self.dt
-
-
 
     def explicit_FTCS_h2(self, initial_field_matrix: np.ndarray):
         """
