@@ -1,4 +1,3 @@
-![](https://komarev.com/ghpvc/?username=l3montree)
 # General
 General contains all current projects that I am working on.
 Projects or topics that I am particularly interested in are:
@@ -23,4 +22,7 @@ Some work into understanding Finite Element Method
 
 ## Visa Free Fiji
 Shows the countrys in which fiji citizens gain visa free entry. Achieved through web scapping a website
+
+Thanks for visiting
+![](https://komarev.com/ghpvc/?username=l3montree)
 
