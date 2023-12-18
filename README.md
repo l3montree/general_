@@ -1,6 +1,6 @@
-![](https://komarev.com/ghpvc/?l3montree)
+![](https://komarev.com/ghpvc/?username=l3montree)
 # General
-General contains all current projects that I am working on.\n
+General contains all current projects that I am working on.
 Projects or topics that I am particularly interested in are:
 - PDE approximations through Finite Element and/or Finite Diference
 - CFD simulations, currently focused on Ansys Fluent, however have plans to explore openFoam
