@@ -1,4 +1,4 @@
-from _2d_wave import wave
+from _2d_wave import Wave
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import *
@@ -19,7 +19,7 @@ class BruteForce_dt:
         self.dx = dx
         self.dy = dy
         self.c = c
-        self.start_point = start_point
+        self.xRange = self.yRange = [0,100]
 
         self._use_stored = False
         self._show_plot = False
@@ -55,7 +55,7 @@ class BruteForce_dt:
     
 
     def _dt_case_study(self, dt,dx, dy):
-        sim = wave(self.start_point, dx,dy,self.c)
+        sim = Wave(dx,dy,self.xRange,self.yRange,self.c)
         sim.dt = dt
         sim._is_stability_study = True
         

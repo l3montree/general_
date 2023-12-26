@@ -1,17 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
-from matplotlib import animation
-import pandas as pd
+from matplotlib.animation import FuncAnimation
+#import pandas as pd
+
+from datetime import datetime
+import time
 
 from pathlib import *
 import os
 
 class Wave:
 
-    def __init__(self, start_point, dx,dy,c):
-
-        self.start_point = start_point
+    def __init__(self, dx,dy,xRange, yRange, c):
 
         # wave pde params
         self._c = c  # velocity of the waves
@@ -20,21 +21,8 @@ class Wave:
         self._dx = dx
         self._dy = dy
 
-        self.x_range = [0,30]
-        self.y_range = self.x_range
-
-        self.cellsize = 1
-
-        #start point
-        """
-        initial field Q(x,y,t= 0) = 0 for all dimensions except Q((x,y) = (startpoint), t=0) = 1
-        """
-        self.x_start = start_point[0]
-        self.y_start = start_point[1]
-
-        if self.x_start < self.x_range[0] or self.x_start> self.x_range[1] or self.y_start < self.y_range[0] or self.y_start> self.y_range[1]:
-            raise ValueError(
-                f'({self.x_start,self.y_start}) not between xrange: ({self.x_range}) and/or yrange: ({self.y_range})')
+        self.x_range = xRange
+        self.y_range = yRange
 
         # x,y points
         self.x_points = np.arange(
@@ -46,8 +34,15 @@ class Wave:
         self.x_num_points = len(self.x_points)
         self.y_num_points = len(self.y_points)
 
+        #matrix solution
+        self.A =None
+
+        #plotting
+        self.X, self.Y = np.meshgrid(self.x_points,self.y_points)
+
         #initialised field?
         self.is_initialised = False
+        self.initial_field = None
 
         #plot animation
         self._animate_figure = True
@@ -58,7 +53,6 @@ class Wave:
         self._cur_quantities_vector = None
         self._prev_quantities_vector = None
         self._cur_time = None
-        self._A = None
         self._initial_field = None
 
         #temporal variables                                                                                                                                                                                                  
@@ -131,33 +125,31 @@ class Wave:
         self._use_CFL = bool
 
     def run(self):
-        points  = []
-        points.append()
 
-        field = self.single_drop_initialise(self.start_point)
-
+        field = self.initialise_field()
 
         print(f'Field initialised. Q(x,y,t = 0)')
         print(f'FDA: {self.explicit_FTCS_h4.__name__}')
 
-        self.explicit_FTCS_h4(field)
+        self.explicit_FTCS_h4()
         print(f'self.run() complete')
 
-    def single_drop_initialise(self, point):
+    def initialise_field(self):
         """
-        produces initial field with Q =0 everywhere except at start_point where Q(start_point) = 1
+        initialises the field
+         - three points at random: with corresponding amplitudes: 3,2,1
         """
-
         field = np.zeros(
             [self.y_num_points, self.x_num_points], dtype=np.float32)
 
-        midpoint = point
-
-        field[midpoint] = 1
+        points = [(int(self.y_range[1]//self.dy*0.2), int(self.x_range[1]//self.dx*0.7)),(int(self.y_range[1]//self.dy*0.5), int(self.x_range[1]//self.dx*0.3)),(int(self.y_range[1]//self.dy*0.85), int(self.x_range[1]//self.dx*0.85))] #points list
+        for i in range(3):
+            #point = [random.randint(self.x_range[:]),random.randint(self.y_range[:])] #uncomment if want to randomise points
+            point = points[i]
+            field[point] = i+1
+    
         self.is_initialised = True
-        self._drop_counter+=1
-
-        return field
+        self.initial_field = field
 
     def convert_matrix_to_vector(self, matrix: np.ndarray):
         """
@@ -171,7 +163,8 @@ class Wave:
         for i in range(x_num):
             for j in range(y_num):
                 vector[ix(i, j)] = matrix[j][i]
-        return vector
+
+        return np.float32(vector)
 
 
     def convert_vector_to_matrix(self, vector: np.ndarray):
@@ -207,19 +200,25 @@ class Wave:
         i = ix % (self.x_num_points)
         return i, j
 
-    def explicit_FTCS_h4(self, initial_field_matrix):
+    def explicit_FTCS_h4(self):
         """
         Explicit Finite difference approximation using:
             - Time: centred difference O(h^2)
             - space: centred difference O(h^4)
         """
+        if not self.is_initialised:
+            raise ValueError(" explicit_FTCS_h4 called but field not initialised")     
+           
         #time
         if self.use_CFL: #uses CFL derived dt
             if not self.dx == self.dy:
                 raise ValueError(f'self.use_CFL = True, cfl calcs has equal grid spacing as a assumption, CFL codition')
-            self.dt = (1/5)**0.5*self.dx/self.c
+            self.dt = round((1/5)**0.5*self.dx/self.c,2)
+
+            self.time_end = 10
+            self.time_points = np.arange(0,self.time_end+self.dt,self.dt)
         else:
-            self.dt = self.set_temporal_points()
+            #implement brute force dt study
 
             if not self.dt:
                 raise ValueError(f'self.use_CFL = False but self.set_temporal_points() = Nan')
@@ -229,10 +228,6 @@ class Wave:
         def xi(ix): return self.xi(ix)
 
         nm_len = int(self.x_num_points*self.y_num_points)
-
-        # initilise matrixs/vectors
-        vectors_per_pos_matrix = np.zeros([nm_len, nm_len], dtype=np.float32)
-
         
         # constants in the finite difference
         tau = (self.c * self.dt)**2
@@ -248,174 +243,167 @@ class Wave:
 
         # initial field vector
         initial_field_vector = self.convert_matrix_to_vector(
-            initial_field_matrix)
+            self.initial_field)
         
         #loop variable init
         t = 0
-
-        #plot variables init
-        X,Y = np.meshgrid(self.x_points,self.y_points)
-
-        #label plot function
-        def _plot_surface(ax,X,Y,Z,t):
-            ax.plot_surface(X, Y, Z, cmap='jet')
-            ax.set_xlabel('X')
-            ax.set_ylabel('Y')
-            ax.set_zlabel('Q')
-            ax.set_title(f"2D Wave Finite Diff Approx @ t = {round(t,2)}")
-            zMax = 2
-            ax.set_zlim(-2*zMax,2*zMax)
-            return ax
         
-        A = vectors_per_pos_matrix.copy()
+        #creating A
+        """
+        A contains all coefficients of the field quantities
+
+        A x = b
+            A --> N x M matrix containing N - x coords, M -y coords, depending on how big spatial domain is and how you discretise it
+                contains coefficients of the quantities, coefficients depend on finite difference approximation
+
+            x --> vector of quanitities in the field of size (NM x 1) at current time step
+            b --> new quantity at new time step
+
+        """
+        if not self.A:
+            start = datetime.now()
+            self.A = np.zeros([nm_len, nm_len], dtype=np.float32)
+
+            for i in range(self.x_num_points):
+                for j in range(self.y_num_points):
+                    cur_row = ix(i, j)  # cur_row in A
+
+                    # BC --> dirichelet
+                    if i in [0, self.x_num_points-1] or j in [0, self.y_num_points-1]:
+                        self.A[cur_row, ix(i, j)] = 0
+
+                    else:  # [(2:xend-2),(2:yend-2)]
+                        # non BC points
+
+                        self.A[cur_row, cur_row] = centre_coeff
+
+                        for i_ in [a for a in range(i-2, i+3) if a >= 0 and a <= self.x_num_points-1]:
+
+                            if i_ == i:
+                                for j_ in [a for a in range(j-2, j+3) if a > 0 and not a == j and a <= self.y_num_points - 1]:
+
+                                    if j_ > j:
+                                        coef_index = j_ - (j - 1)
+                                    else:
+                                        coef_index = j_ - (j - 2)
+
+                                    self.A[cur_row, ix(
+                                        i, j_)] = Ylap_coef_list[coef_index]
+                            else:
+                                if i_ > i:
+                                    coef_index = i_ - (i - 1)
+                                else:
+                                    coef_index = i_ - (i - 2)
+                                self.A[cur_row, ix(i_, j)] = Xlap_coef_list[coef_index]
+
+                                """
+                                A[cur_row,ix(i+2,j)] = -tau/ alpha
+                                A[cur_row,ix(i+1,j)] = 16*tau/ alpha
+                                A[cur_row,ix(i-1,j)] = 16*tau/ alpha
+                                A[cur_row,ix(i-2,j)] = -tau/ alpha
+
+                                A[cur_row,ix(i,j+2)] = -tau/ beta
+                                A[cur_row,ix(i,j+1)] = 16*tau/ beta
+                                A[cur_row,ix(i,j-1)] = 16*tau/ beta
+                                A[cur_row,ix(i,j-2)] = -tau/ beta
+                                """
+            end  = datetime.now()
+            print(f'A created, time elapsed: {(end - start).total_seconds()* 10**3:.03f} ms')
 
         if not self._is_iteration: #active when brute force dt study is NOT being conducted
-            while True: 
-
-                # time_ = self.time_points[t]
-
-                if t == 0:  # initialises cur_quantities and prev_quanities
-                    _cur_quantities_vector = initial_field_vector.copy()
-                    _prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
-
-                    # initialise plot
-                    fig = plt.figure()
-                    ax = plt.axes(projection='3d')
-                    #plt.show()
-
-                    Z = initial_field_matrix
-                    ax = _plot_surface(ax,X,Y,Z,t)
-
-                    #plt.show()
-                    
-                    # plt.pause(10)
-                    t += self.dt
-                    print(f't = {t}')
-
-                    for i in range(self.x_num_points):
-                        for j in range(self.y_num_points):
-                            cur_row = ix(i, j)  # cur_row in A
-
-                            # BC --> dirichelet
-                            if i in [0, self.x_num_points-1] or j in [0, self.y_num_points-1]:
-                                A[cur_row, ix(i, j)] = 0
-
-                            else:  # [(2:xend-2),(2:yend-2)]
-                                # non BC points
-
-                                A[cur_row, cur_row] = centre_coeff
-
-                                for i_ in [a for a in range(i-2, i+3) if a >= 0 and a <= self.x_num_points-1]:
-
-                                    if i_ == i:
-                                        for j_ in [a for a in range(j-2, j+3) if a > 0 and not a == j and a <= self.y_num_points - 1]:
-
-                                            if j_ > j:
-                                                coef_index = j_ - (j - 1)
-                                            else:
-                                                coef_index = j_ - (j - 2)
-
-                                            A[cur_row, ix(
-                                                i, j_)] = Ylap_coef_list[coef_index]
-                                    else:
-                                        if i_ > i:
-                                            coef_index = i_ - (i - 1)
-                                        else:
-                                            coef_index = i_ - (i - 2)
-                                        A[cur_row, ix(i_, j)
-                                        ] = Xlap_coef_list[coef_index]
-
-                                        """
-                                        A[cur_row,ix(i+2,j)] = -tau/ alpha
-                                        A[cur_row,ix(i+1,j)] = 16*tau/ alpha
-                                        A[cur_row,ix(i-1,j)] = 16*tau/ alpha
-                                        A[cur_row,ix(i-2,j)] = -tau/ alpha
-
-                                        A[cur_row,ix(i,j+2)] = -tau/ beta
-                                        A[cur_row,ix(i,j+1)] = 16*tau/ beta
-                                        A[cur_row,ix(i,j-1)] = 16*tau/ beta
-                                        A[cur_row,ix(i,j-2)] = -tau/ beta
-                                        """
-
-                else:
-                    # updates the vectors
-                    _prev_quantities_vector = _cur_quantities_vector.copy()
-                    _cur_quantities_vector = new_time_quantities_vector.copy()
-
-                new_time_quantities_vector = A@_cur_quantities_vector - _prev_quantities_vector
-
-                Q_matrix = self.convert_vector_to_matrix(
-                    new_time_quantities_vector)
-                
-                Z = Q_matrix #needed to update the animation
-
+            
                 if self._animate_figure:
-                    print(f'ax.cla() runs')
-                    ax.cla()
+
+                    fig = plt.figure()
+                    ax = fig.add_subplot(111, projection = '3d')
+
+                    ax.set_xlabel('X')
+                    ax.set_ylabel('Y')
+                    ax.set_zlabel('Q')
+                    ax.set_zlim(-4,4)
+
+                    Z = self.initial_field
+                    ax.plot_surface(self.X, self.Y, Z, cmap='jet')
+                    ax.set_title(f"2D Wave Finite Diff Approx @ t = {0}")
+
+                    self._cur_quantities_vector = initial_field_vector.copy()
+                    self._prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
+
+                    def update_animation(frame):
+                        print(f'update animation {frame}')
+                        ax.cla()
+
+                        if frame == 0:
+                            pass
+                            #start_ = datetime.now()
+                        else:
+                            # updates the vectors
+                            
+                            self._prev_quantities_vector = self._cur_quantities_vector.copy()
+                            self._cur_quantities_vector = self.new_time_quantities_vector.copy()
+                        
+                        start_ = datetime.now()
+                        self.new_time_quantities_vector = self.A@self._cur_quantities_vector - self._prev_quantities_vector
+                        end_ = datetime.now()
+                        Z = self.convert_vector_to_matrix(self.new_time_quantities_vector)
+
+                        
+                        print(f'time step calc complete: time  = {frame}, time elapsed: {(end_ - start_).total_seconds():.03f} s')
+                        
+                        ax.plot_surface(self.X, self.Y, Z, cmap='jet')
+                        ax.set_zlim(-4,4)
+                        ax.set_title(f"2D Wave Finite Diff Approx @ t = {round(frame,2)}")
+                    
+                    ani = FuncAnimation(fig, update_animation, frames = self.time_points, interval = 200, repeat = False)
+                    plt.show()
+
                 else:
-                    plt.figure()
-                    ax = plt.axes(projection='3d')
+                    print(f'Plotting individual timesteps')
 
-                ax = _plot_surface(ax,X,Y,Z,t)
-                print(f'time = {t}, printed quantities')
-                plt.draw()
-                plt.show()
+                    while True:
 
-                plt.pause(2)
+                        if t == 0:
+                            _cur_quantities_vector = initial_field_vector.copy()
+                            _prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
+                            
+                            Z = self.initial_field
+                            t += self.dt
+                            print(f't = {t}')
+                        else:
+                            # updates the vectors
+                            _prev_quantities_vector = _cur_quantities_vector.copy()
+                            _cur_quantities_vector = new_time_quantities_vector.copy()
+                        
+                            new_time_quantities_vector = self.A@_cur_quantities_vector - _prev_quantities_vector
 
-                t += self.dt
+                            Z = self.convert_vector_to_matrix(new_time_quantities_vector)
+                            print(f't = {t}')
+                        
+                        fig = plt.figure()
+                        ax = plt.axes(projection='3d')
+                        ax.plot_surface(self.X, self.Y, Z, cmap='jet')
+                        ax.set_xlabel('X')
+                        ax.set_ylabel('Y')
+                        ax.set_zlabel('Q')
+                        ax.set_title(f"2D Wave Finite Diff Approx @ t = {t}")
+                        ax.set_zlim(-4,4)
+
+                        t += self.dt
 
         else:
             self.iteration_iter+=1
             #print(f'iteration, iter {self.iteration_iter}')
 
-            if not self._cur_time:  # initialises cur_quantities and prev_quanities
-                self._A = vectors_per_pos_matrix.copy()
-                self._cur_time = 0
+            if self._cur_time == 0:  # initialises cur_quantities and prev_quanities
                 self._cur_quantities_vector = initial_field_vector.copy()
                 self._prev_quantities_vector = np.zeros(nm_len, dtype=np.float32)
 
                 self._cur_time += self.dt
 
-
-                for i in range(self.x_num_points):
-                    for j in range(self.y_num_points):
-                        cur_row = ix(i, j)  # cur_row in A
-
-                        # BC --> dirichelet
-                        if i in [0, self.x_num_points-1] or j in [0, self.y_num_points-1]:
-                            A[cur_row, ix(i, j)] = 0
-
-                        else:  # [(2:xend-2),(2:yend-2)]
-                            # non BC points
-
-                            A[cur_row, cur_row] = centre_coeff
-
-                            for i_ in [a for a in range(i-2, i+3) if a >= 0 and a <= self.x_num_points-1]:
-
-                                if i_ == i:
-                                    for j_ in [a for a in range(j-2, j+3) if a > 0 and not a == j and a <= self.y_num_points - 1]:
-
-                                        if j_ > j:
-                                            coef_index = j_ - (j - 1)
-                                        else:
-                                            coef_index = j_ - (j - 2)
-
-                                        A[cur_row, ix(
-                                            i, j_)] = Ylap_coef_list[coef_index]
-                                else:
-                                    if i_ > i:
-                                        coef_index = i_ - (i - 1)
-                                    else:
-                                        coef_index = i_ - (i - 2)
-                                    A[cur_row, ix(i_, j)
-                                    ] = Xlap_coef_list[coef_index]
-
-
-            new_time_quantities_vector = A@self._cur_quantities_vector - self._prev_quantities_vector
+            new_time_quantities_vector = self.A@self._cur_quantities_vector - self._prev_quantities_vector
 
             self._prev_quantities_vector = self._cur_quantities_vector.copy()
-            self._cur_quantities_vector = new_time_quantities_vector.copy()
+            self._cur_quantities_vector = new_time_quantities_vector.copy() #used by brute force study
 
             self._cur_time += self.dt
 
@@ -644,130 +632,23 @@ class Wave:
 
     def __iter__(self):
         self._is_iteration = True
-        self.solve_using_pde_fd()
+        if not self.is_initialised:
+            self.initialise_field()
+        self.explicit_FTCS_h4()
+        
         #print(f"iter = {self.iteration_iter}: dx = {self.dx}, dy = {self.dy}, dt ={self.dt}")
         return self
     
     def __next__(self):
         if not self._is_iteration:
             raise StopIteration
-    
-    def print_Z(self, Z):
-    
-        X, Y = np.meshgrid(self.x_points, self.y_points)
-        # Create a 3D plot
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-
-        # Plot the (x, y, z) data points
-        # ax.plot_wireframe(X, Y, Z, rstride=10, cstride=10)
-        ax.plot([self.x_start, self.x_start], [self.y_start,
-                self.y_start], [-1.5, 1.5], c="k", marker="*")
-        # ax.scatter(X, Y, Z, c = Z, cmap = 'jet')
-
-        ax.plot_surface(X, Y, Z, cmap='jet')
-
-        # Add labels
-        ax.set_xlabel('X Label')
-        ax.set_ylabel('Y Label')
-        ax.set_zlabel('Z Label')
-    
-    
-    # DEBUGGING
-    def make_csv(self, input):
-
-        csv_file = f'{self.csv_iter}_output_file.csv'
-
-        if isinstance(input, np.ndarray):
-            # Save the NumPy array as a CSV file
-            np.savetxt(csv_file, input)
-        else:
-
-            # Write the matrix to the CSV file
-            with open(csv_file, "w", newline="") as csvfile:
-                csv_writer = csv.writer(csvfile)
-                csv_writer.writerows(input)
-
-        self.csv_iter += 1
-        return self.csv_iter - 1
-    
-
-    
-    #functions for finding dt by brute force
-    
-    def set_temporal_points(self):
-        """
-        called when dt brute force study results are used to determine dt
-        - reads data file
-        - determines dt by interpolation
-        - returns dt, temporal points
-        """
-        df = pd.read_excel(self.excel_file)
-
-        #sort out how to determine dt given datapoints in df
-
-        return None
-    
-
-    def dt_error(self,str = None):
-        """
-        used for debugging
-        """
-        raise ValueError(f'dx ={self.dx}, dy ={self.dy}, c ={self.c}\n{str}\ndt_error, needs a study!')
-    
-
-    def _dt_stability_study(self):
-        """
-        finds dt through brute force
-        """
-        dt_default = 1
-        prints_default = lambda str: f'dt_stability_study(): dt_default = 1, \ngiven {str}'
-
-        if self.excel_file in os.listdir(os.getcwd()): #if file already exists
-
-            df = pd.read_excel(self.excel_file)
-        
-            if not "c" in df.columns:
-                #incase old files exists where "c" is not one of the columns
-                print(prints_default("not c in df.columns"))
-                return dt_default
-            
-            if not self.c in df["c"].values:
-                #if self.c is not in data file --> run another study with the self.c
-                print(prints_default("not self.c in df[c],values"))
-                return dt_default
-
-            dt =df["dt"].min()
-            
-            """
-            #finds closest value from study
-
-            #sorts into ascending order
-            df.sort_values(by=['dx'], ascending = True, inplace=True)
-            #h = df["h"][0]
-            
-            c_index_range = [i for i in range(len(df)) if df["c"][i]==self.c]
-            df["dx_c"] = df["dx"][c_index_range]
-            df["dx_diff"] = abs(df["dx"][c_index_range] - self.dx)
-            df["dy_diff"] = abs(df["dy"] - self.dy)
-            df["diff_sum"] = df["dx_diff"] + df["dy_diff"]
-                
-            dt_index = df["diff_sum"].idxmin() 
-            dt = df["dt"][dt_index]
-            """
-            dt = dt
-        else: #if file doesnt already exists
-            self.dt_error("self.excel_file in os.listdir(os.getcwd())")
-        
-        print(f'dt_study(): from dt_study data: dt = {dt}')
-        return dt
-        
 
 
 if __name__ == "__main__":
-    dx = dy = 0.5
-    c = 1
-    start_point = [10, 10]
-    sim = Wave(start_point, dx,dy,c)
+    dx = dy = 1
+    c = 10
+    xRange = yRange = [0,50]
+
+    sim = Wave(dx,dy,xRange, yRange, c)
     sim.animate_figure = True
     sim.run()
