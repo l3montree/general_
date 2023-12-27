@@ -5,7 +5,7 @@ Complete notes here:
 https://docs.google.com/document/d/1UdAre0QydwtkgXZ3MHh-wKCYS5iFsHr1RvFlGK6Nx_w/edit?usp=sharing
 
 To run: 
-    python3 Wave_2D.py [-h] [--h] [--xRange] [--yRange] [--c] [--verbose] [--to_animate]
+    $ python3 Wave_2D.py [-h] [--h] [--xRange] [--yRange] [--c] [--verbose] [--to_animate]
 
     [-h]            help
     [--h]           increments in spatial domain
