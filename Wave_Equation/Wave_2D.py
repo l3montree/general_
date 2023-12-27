@@ -378,12 +378,12 @@ class Wave:
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description = 'inputs for WAVE_2D.Wave()')
-    parser.add_argument('h', type = float, help ="spatial increments",default=1, required = False)
-    parser.add_argument('xRange', type = list[float], help  = 'x - Range of domain eg. xRange = [0,50]',default= [0,50], required = False)
-    parser.add_argument('yRange',type = list[float], help  = 'y - Range of domain eg. yRange = [0,50]', default =[0,50], required = False)
-    parser.add_argument('c', type = float,help = "wave speed", default=10, required = False)
-    parser.add_argument('verbose', type = bool, help ="to view extra info", default = True, required = False)
-    parser.add_argument('to_animate', type = bool, help ="view plots as animation?", default = True, required = False)
+    parser.add_argument('--h', type = float, help ="spatial increments",default=1)
+    parser.add_argument('--xRange', type = list[float], help  = 'x - Range of domain eg. xRange = [0,50]',default= [0,50])
+    parser.add_argument('--yRange',type = list[float], help  = 'y - Range of domain eg. yRange = [0,50]', default =[0,50])
+    parser.add_argument('--c', type = float,help = "wave speed", default=10)
+    parser.add_argument('--verbose', type = bool, help ="to view extra info", default = True)
+    parser.add_argument('--to_animate', type = bool, help ="view plots as animation?", default = True)
 
     arg = parser.parse_args()
 
