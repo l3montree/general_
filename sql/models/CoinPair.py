@@ -1,5 +1,4 @@
 from models.base import Base
-from models.Time import Time
 
 from sqlalchemy import Column, ForeignKey, Integer, String, Float, CheckConstraint, DateTime, Boolean, event
 from sqlalchemy.orm import relationship, Session
