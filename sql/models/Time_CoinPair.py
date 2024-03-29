@@ -6,12 +6,17 @@ from sqlalchemy.orm import *
 from pathlib import Path
 from typing import *
 
-coinpairs_list_path:Path = "*/database_resources/pairCoins.txt"
+"""
+creates a table with columns = coinpairs, row = datetime, values are prices
+    parses coinpair db and updates this table
+"""
+coin_pairs_filename = "coin_pairs_list"
+coinpairs_list_path:Path = f'*/database_resources/{coin_pairs_filename}*'
 coinpair_list_fromfile = None
 
 try:
     with open(coinpairs_list_path,"r") as file:
-        coinpairs_list_from_file:List = file.read()
+        coinpairs_list_fromfile:List = file.read()
 except:
     #creates file if it doesnt exist
     with open(coinpairs_list_path,"x") as file:
@@ -21,14 +26,11 @@ except:
 class TimeCoinPair(Base):
     __tablename__ = "time_coinpair"
 
-    coinpairs_list = coinpairs_list_from_file
+    coinpairs_list = coinpairs_list_fromfile
 
     id = Column(Integer, primary_key=True)
     date_time  = Column(DateTime)
     coinpairs_total = Column(Integer)
-
-    def __setattr__(self,attr):
-        self.
 
     @classmethod
     def append_coinpair_list(cls, coinpair: Union[Integer,List], verbose:bool = False):
@@ -58,6 +60,7 @@ class TimeCoinPair(Base):
 
         for coinpair in coinpairs:
             if coinpair in coinpair_list:
+                pass
 
 
 

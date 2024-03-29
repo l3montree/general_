@@ -3,6 +3,10 @@ from models.base import Base
 from sqlalchemy import Column, ForeignKey, Integer, String, Float, CheckConstraint, DateTime, Boolean, event
 from sqlalchemy.orm import relationship, Session
 
+"""
+SQL table class stores: coins,coinpairs, price etc
+    stores raw data that will be analysed later
+"""
 
 class CoinPair(Base):
     __tablename__ ="coin_pair"
