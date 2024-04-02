@@ -1,4 +1,6 @@
+from models.base import Base
 #from models.Coin import Coins
 from models.CoinPair import CoinPair
-#from models.Time import Time
-from models.base import Base
+from models.Time_CoinPair import TimeCoinPair
+
+

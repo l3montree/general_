@@ -2,65 +2,58 @@ from models import Base
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
+from sqlalchemy.sql.compiler import IdentifierPreparer
 
 from pathlib import Path
 from typing import *
+import os.path
+
+import pandas as pd
 
 """
 creates a table with columns = coinpairs, row = datetime, values are prices
     parses coinpair db and updates this table
 """
-coin_pairs_filename = "coin_pairs_list"
-coinpairs_list_path:Path = f'*/database_resources/{coin_pairs_filename}*'
-coinpair_list_fromfile = None
-
-try:
-    with open(coinpairs_list_path,"r") as file:
-        coinpairs_list_fromfile:List = file.read()
-except:
-    #creates file if it doesnt exist
-    with open(coinpairs_list_path,"x") as file:
-        coinpair_list_fromfile = []
-
-
 class TimeCoinPair(Base):
     __tablename__ = "time_coinpair"
-
-    coinpairs_list = coinpairs_list_fromfile
 
     id = Column(Integer, primary_key=True)
     date_time  = Column(DateTime)
     coinpairs_total = Column(Integer)
 
-    @classmethod
-    def append_coinpair_list(cls, coinpair: Union[Integer,List], verbose:bool = False):
-        if isinstance(coinpair,List):
-            for coinpair_ in coinpair:
-                if not coinpair_ in cls.coinpairs_list:
-                    cls.coinpairs_list.append(coinpair)
-                if verbose:
-                    print("Appended {coinpair} to list.\nComplete list = {cls.coinpairs_list}") 
-                #update txt file
-                with open(coinpairs_list_path, "w") as file:
-                    file.write(cls.coinpairs_list)
+    coinpairs_list = []
 
-    @classmethod
-    def create_columns(cls,column_list:List):
-        new_coinpairs_cols =[]
-        for col in column_list:
-            if not col in TimeCoinPair.__table__.columns.keys():
-                exec(f'{col} = Column(Integer)')
-                new_coinpairs_cols.append(col)
-        cls.append_coinpair_list(new_coinpairs_cols)
-
-    def __init__(self, datetime:DateTime, coinpairs:Dict[String:Float]):
+    def __init__(self, datetime:DateTime):
         date_time = datetime
-        coinpairs_total = len(coinpairs)
+        
+        self.coin_pairs_filename = "coin_pairs_list.csv"
+        self.coinpairs_list_path:Path = f'database_resources/{self.coin_pairs_filename}'
+
+        if not os.path.isfile(self.coinpairs_list_path):
+            open(self.coinpairs_list_path, "w")
+
+        if len(TimeCoinPair.__table__.columns.keys())<4:
+            self.load_stored_coinpairs()
+
+        coinpairs_total = len(self.coinpairs_list)
+
+    def load_stored_coinpairs(cls):
+        #creates columns for all coinpairs in coin_pairs_list.txt
+        stored_coin_pairs = pd.read_csv(cls.coinpairs_list_path)
+        stored_coin_pairs = stored_coin_pairs.values.flatten().tolist()
+
+        for coinpair in stored_coin_pairs:
+            column = Column(Float, name = coinpair, quote = False)
+            TimeCoinPair.__table__.append_column(column)
+            cls.coinpairs_list.append(coinpair)
 
 
-        for coinpair in coinpairs:
-            if coinpair in coinpair_list:
-                pass
+    def get_coinpairs(self):
+        return self.coinpairs_list
+
+    
+
+    
 
 
 

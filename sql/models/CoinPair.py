@@ -19,7 +19,7 @@ class CoinPair(Base):
     status = Column(String)
     enabled = Column(Boolean)
     
-    date_time = Column(DateTime, ForeignKey("time.Date_time"))
+    date_time = Column(DateTime)
 
     __table_args__ =(
         CheckConstraint('from_coin <> to_coin', name ="different_coins_constraint"),)#ensures to_coin != from_coin
