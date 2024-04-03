@@ -191,14 +191,8 @@ class ParseData():
                 df = pd.read_sql(stmt, session.bind)
 
                 df_filepath = os.path.join(file_path,f'{table_name}{file_ext}')
-
-                if not df_filepath in df_files_in_dir:
-                    
-                    df2 = pd.read_excel(df_filepath, engine = "xlrd")
-                    df3 = pd.concat([df2,df],index = False)
-                    df3.to_excel(df_filepath,index = False)
-                else:
-                    df.to_excel(df_filepath, index = False)
+                df.to_excel(df_filepath, index = False)
+                
 
 
 if __name__ == "__main__":
